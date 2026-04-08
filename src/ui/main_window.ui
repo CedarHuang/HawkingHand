@@ -152,6 +152,28 @@
        </widget>
       </item>
       <item>
+       <widget class="QPushButton" name="btnMaximize">
+        <property name="minimumSize">
+         <size>
+          <width>40</width>
+          <height>40</height>
+         </size>
+        </property>
+        <property name="maximumSize">
+         <size>
+          <width>40</width>
+          <height>40</height>
+         </size>
+        </property>
+        <property name="text">
+         <string notr="true">☐</string>
+        </property>
+        <property name="flat">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+      <item>
        <widget class="QPushButton" name="btnClose">
         <property name="minimumSize">
          <size>

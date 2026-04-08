@@ -20,12 +20,13 @@ NAV_EXPANDED_WIDTH = 160
 # ============================================================
 
 class TitleBarDragHelper(QObject):
-    """为无边框窗口的标题栏提供拖拽移动支持"""
+    """为无边框窗口的标题栏提供拖拽移动和双击最大化支持"""
 
-    def __init__(self, titleBar: QWidget, window: QWidget):
+    def __init__(self, titleBar: QWidget, window: QWidget, toggleMaximize=None):
         super().__init__(titleBar)
         self._titleBar = titleBar
         self._window = window
+        self._toggleMaximize = toggleMaximize
         self._dragging = False
         self._dragStartPos = QPoint()
         titleBar.installEventFilter(self)
@@ -34,7 +35,12 @@ class TitleBarDragHelper(QObject):
         if obj is not self._titleBar:
             return False
 
-        if event.type() == QEvent.Type.MouseButtonPress:
+        if event.type() == QEvent.Type.MouseButtonDblClick:
+            if event.button() == Qt.LeftButton and self._toggleMaximize:
+                self._toggleMaximize()
+                return True
+
+        elif event.type() == QEvent.Type.MouseButtonPress:
             if event.button() == Qt.LeftButton:
                 self._dragging = True
                 self._dragStartPos = (
@@ -45,9 +51,23 @@ class TitleBarDragHelper(QObject):
 
         elif event.type() == QEvent.Type.MouseMove:
             if self._dragging and event.buttons() & Qt.LeftButton:
-                self._window.move(
-                    event.globalPosition().toPoint() - self._dragStartPos
-                )
+                if self._window.isMaximized():
+                    # 最大化状态下拖拽：先还原窗口，再开始拖拽
+                    globalPos = event.globalPosition().toPoint()
+                    # 计算鼠标在标题栏中的相对水平位置比例
+                    oldWidth = self._window.width()
+                    relativeX = self._dragStartPos.x()
+                    # 在 showNormal() 之前获取还原后的宽度（避免异步时序问题）
+                    newWidth = self._window.normalGeometry().width()
+                    self._window.showNormal()
+                    # 按比例映射到还原后的窗口宽度
+                    newX = int(relativeX * newWidth / oldWidth)
+                    self._dragStartPos = QPoint(newX, self._dragStartPos.y())
+                    self._window.move(globalPos - self._dragStartPos)
+                else:
+                    self._window.move(
+                        event.globalPosition().toPoint() - self._dragStartPos
+                    )
                 return True
 
         elif event.type() == QEvent.Type.MouseButtonRelease:

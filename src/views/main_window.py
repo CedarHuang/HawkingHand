@@ -15,6 +15,7 @@ from core import common
 from core.callbacks import callbacks, CallbackEvent
 from core.config import settings as configSettings
 from ui.generated.ui_main_window import Ui_MainWindow
+from views import _polishWidget
 from views.appearance import applyTheme, resolveTheme
 from views.event_controller import EventController
 from views.event_edit_page import EventEditPage
@@ -59,8 +60,18 @@ class MainWindow(QWidget):
         # ---- bodyFrame 圆角裁剪（防止子控件突出） ----
         self.ui.bodyFrame.installEventFilter(self)
 
-        # ---- 标题栏拖拽 ----
-        self._dragHelper = TitleBarDragHelper(self.ui.titleBar, self)
+        # ---- 最大化样式状态同步目标控件 ----
+        self._maximizedStyleWidgets = (
+            self.ui.windowFrame,
+            self.ui.titleBar,
+            self.ui.btnClose,
+            self.ui.bodyFrame,
+            self.ui.navBar,
+        )
+        self._applyWindowStateStyle(False)
+
+        # ---- 标题栏拖拽 & 双击最大化 ----
+        self._dragHelper = TitleBarDragHelper(self.ui.titleBar, self, self._toggleMaximize)
 
         # ---- 创建子页面 ----
         self.eventListPage = EventListPage()
@@ -88,6 +99,7 @@ class MainWindow(QWidget):
 
         # ---- 标题栏按钮 ----
         self.ui.btnMinimize.clicked.connect(self.showMinimized)
+        self.ui.btnMaximize.clicked.connect(self._toggleMaximize)
         self.ui.btnClose.clicked.connect(self.close)
 
         # ---- 业务控制器 ----
@@ -152,6 +164,48 @@ class MainWindow(QWidget):
         """导航按钮点击，切换到对应页面"""
         self.ui.contentStack.setCurrentIndex(btnId)
 
+    # ---- 最大化 / 还原 ----
+
+    def _toggleMaximize(self):
+        """切换最大化 / 还原状态"""
+        if self.isMaximized():
+            self.showNormal()
+        else:
+            self.showMaximized()
+
+    def _updateMaximizeButton(self):
+        """根据窗口状态更新最大化按钮图标"""
+        if self.isMaximized():
+            self.ui.btnMaximize.setText("❐")  # 还原图标
+        else:
+            self.ui.btnMaximize.setText("☐")  # 最大化图标
+
+    def _updateWindowStyle(self):
+        """最大化时去掉圆角和边距，还原时恢复"""
+        maximized = self.isMaximized()
+        if maximized:
+            self.ui.rootLayout.setContentsMargins(0, 0, 0, 0)
+        else:
+            self.ui.rootLayout.setContentsMargins(5, 5, 5, 5)
+
+        self._applyWindowStateStyle(maximized)
+
+        # 更新 bodyFrame 的圆角裁剪 mask
+        self._updateBodyMask()
+
+    def _applyWindowStateStyle(self, maximized: bool):
+        """同步窗口状态相关的动态属性并刷新对应控件样式"""
+        for widget in self._maximizedStyleWidgets:
+            widget.setProperty("windowMaximized", maximized)
+            _polishWidget(widget)
+
+    def changeEvent(self, event):
+        """窗口状态变化时同步更新按钮和样式"""
+        super().changeEvent(event)
+        if event.type() == QEvent.Type.WindowStateChange:
+            self._updateMaximizeButton()
+            self._updateWindowStyle()
+
     # ---- 窗口唤醒 ----
 
     def _onWakeup(self):
@@ -185,13 +239,22 @@ class MainWindow(QWidget):
 
     # ---- 内部方法 ----
 
+    def _updateBodyMask(self):
+        """更新 bodyFrame 的圆角裁剪 mask（最大化时不裁剪）"""
+        body = self.ui.bodyFrame
+        if self.isMaximized():
+            body.clearMask()
+        else:
+            r = 10
+            rect = body.rect()
+            path = QPainterPath()
+            path.addRoundedRect(0, -r, rect.width() - 1, rect.height() + r - 1, r, r)
+            body.setMask(QRegion(path.toFillPolygon().toPolygon()))
+
     def eventFilter(self, obj, event):
         """bodyFrame resize 时更新圆角裁剪区域"""
         if obj is self.ui.bodyFrame and event.type() == QEvent.Type.Resize:
-            r = 10
-            path = QPainterPath()
-            path.addRoundedRect(0, -r, event.size().width() - 1, event.size().height() + r - 1, r, r)
-            obj.setMask(QRegion(path.toFillPolygon().toPolygon()))
+            self._updateBodyMask()
         return super().eventFilter(obj, event)
 
     def _embedPage(self, index: int, page: QWidget):

@@ -41,7 +41,8 @@ QLabel#versionLabel {
 }
 
 /* 标题栏窗口控制按钮 */
-QPushButton#btnMinimize {
+QPushButton#btnMinimize,
+QPushButton#btnMaximize {
     border: none;
     border-radius: 0px;
     font-size: 14px;
@@ -65,6 +66,29 @@ QFrame#bodyFrame {
 QFrame#navBar {
     border: none;
     border-bottom-left-radius: 10px;
+}
+
+/* 主窗口最大化时去掉外层圆角，动态属性直接挂在目标控件上 */
+QFrame#windowFrame[windowMaximized="true"] {
+    border-radius: 0px;
+}
+
+QFrame#titleBar[windowMaximized="true"] {
+    border-top-left-radius: 0px;
+    border-top-right-radius: 0px;
+}
+
+QPushButton#btnClose[windowMaximized="true"] {
+    border-top-right-radius: 0px;
+}
+
+QFrame#bodyFrame[windowMaximized="true"] {
+    border-bottom-left-radius: 0px;
+    border-bottom-right-radius: 0px;
+}
+
+QFrame#navBar[windowMaximized="true"] {
+    border-bottom-left-radius: 0px;
 }
 
 QPushButton#navBtnEvents,

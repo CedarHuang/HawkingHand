@@ -52,16 +52,19 @@ QLabel#versionLabel {
     color: #5C6370;
 }
 
-/* 最小化按钮 */
-QPushButton#btnMinimize {
+/* 最小化 / 最大化按钮 */
+QPushButton#btnMinimize,
+QPushButton#btnMaximize {
     background-color: transparent;
     color: #ABB2BF;
 }
-QPushButton#btnMinimize:hover {
+QPushButton#btnMinimize:hover,
+QPushButton#btnMaximize:hover {
     background-color: #3E4451;
     color: #D7DAE0;
 }
-QPushButton#btnMinimize:pressed {
+QPushButton#btnMinimize:pressed,
+QPushButton#btnMaximize:pressed {
     background-color: #4B5263;
 }
 
