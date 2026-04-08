@@ -138,6 +138,36 @@ class EventListPage(QWidget):
         self._updateEmptyState()
         return card
 
+    def rebuildCards(self, cardDataList: list[tuple]):
+        """批量重建所有卡片，保持滚动位置不变
+
+        Args:
+            cardDataList: 每个元素为 (eventType, hotkey, target, scope, extra, enabled) 元组
+        """
+        # 记住当前滚动位置
+        scrollBar = self.ui.scrollArea.verticalScrollBar()
+        savedScrollPos = scrollBar.value()
+
+        # 清空卡片但不切换空状态（避免 scrollArea 被隐藏导致滚动位置重置）
+        self._cancelDrag()
+        for card in self._cards:
+            self.ui.eventListLayout.removeWidget(card)
+            card.deleteLater()
+        self._cards.clear()
+        if self._bottomSpacer is not None:
+            self.ui.eventListLayout.removeItem(self._bottomSpacer)
+            self._bottomSpacer = None
+
+        # 重新添加所有卡片
+        for eventType, hotkey, target, scope, extra, enabled in cardDataList:
+            self.addCard(eventType, hotkey, target, scope, extra, enabled)
+
+        # 最终统一更新空状态
+        self._updateEmptyState()
+
+        # 恢复滚动位置
+        scrollBar.setValue(savedScrollPos)
+
     def cardCount(self) -> int:
         """返回当前卡片数量"""
         return len(self._cards)

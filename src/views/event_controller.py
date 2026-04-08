@@ -62,10 +62,10 @@ class EventController:
 
     def refreshEventList(self):
         """从 config.events 加载真实数据并刷新事件列表卡片"""
-        self._eventListPage.clearCards()
+        cardDataList = []
         for event in configEvents:
-            eventType, hotkey, target, scope, extra, enabled = self._eventToCardData(event)
-            self._eventListPage.addCard(eventType, hotkey, target, scope, extra, enabled)
+            cardDataList.append(self._eventToCardData(event))
+        self._eventListPage.rebuildCards(cardDataList)
 
     @staticmethod
     def _eventToCardData(event: Event) -> tuple:
