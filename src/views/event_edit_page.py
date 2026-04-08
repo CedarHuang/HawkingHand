@@ -393,12 +393,26 @@ class EventEditPage(QWidget):
 
         对于预设的鼠标按钮选项，返回不受翻译影响的内部值（如 "mouse_left"）；
         对于用户手动输入的键盘按键名，返回输入的文本。
+
+        注意：可编辑 QComboBox 中，用户修改输入框文本但未按回车时，
+        currentIndex 仍指向旧的预设项，currentData() 会返回旧预设值。
+        因此需要额外比较编辑框文本与当前选中项的显示文本是否一致。
         """
+        idx = self.ui.buttonCombo.currentIndex()
         data = self.ui.buttonCombo.currentData()
-        if data is not None:
-            return str(data)
+        editText = self.ui.buttonCombo.currentText().strip()
+
+        if data is not None and idx >= 0:
+            # 当前 index 指向预设项，但编辑框文本可能已被用户修改
+            itemText = self.ui.buttonCombo.itemText(idx)
+            if editText == itemText:
+                # 文本与预设项一致，返回内部值
+                return str(data)
+            # 文本已被用户修改（自定义输入但未按回车），返回实际输入
+            return editText
+
         # 用户手动输入的键盘按键，无 itemData，直接返回文本
-        return self.ui.buttonCombo.currentText().strip()
+        return editText
 
     def _setButtonComboValue(self, value: str):
         """根据内部值设置 buttonCombo 的选中项
