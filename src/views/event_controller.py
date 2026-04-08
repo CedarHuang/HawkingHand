@@ -224,10 +224,11 @@ class EventController:
             self.refreshEventList()
 
     def onCopyEvent(self, index: int):
-        """复制事件（深拷贝并追加到列表末尾）"""
+        """复制事件（深拷贝并插入到被复制事件的下方，默认禁用）"""
         if 0 <= index < len(configEvents):
             newEvent = Event.from_dict(copy.deepcopy(configEvents[index].to_dict()))
-            configEvents.append(newEvent)
+            newEvent.enabled = False
+            configEvents.insert(index + 1, newEvent)
             self.refreshEventList()
 
     def onMoveEvent(self, fromIndex: int, toIndex: int):

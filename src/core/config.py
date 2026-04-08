@@ -26,6 +26,10 @@ class EventManager(list):
         event_listener.stop()
         event_listener.start()
 
+    def insert(self, index, event):
+        super().insert(index, event)
+        self.save()
+
     def append(self, event):
         super().append(event)
         self.save()
