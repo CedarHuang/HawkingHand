@@ -5,6 +5,8 @@
 左侧可折叠导航栏、右侧内容区页面切换等 UI 交互。
 """
 
+import sys
+
 from PySide6.QtCore import Qt, QSize, Signal, QEvent
 from PySide6.QtGui import QIcon, QPainterPath, QRegion
 from PySide6.QtWidgets import (
@@ -27,6 +29,25 @@ from views.settings_page import SettingsPage
 from views.settings_controller import SettingsController
 from views.tray import TrayManager
 
+IS_WINDOWS = sys.platform == "win32"
+
+if IS_WINDOWS:
+    import ctypes
+    import ctypes.wintypes
+
+    GWL_STYLE = -16
+    WM_NCHITTEST = 0x0084
+    HTLEFT = 10
+    HTRIGHT = 11
+    HTTOP = 12
+    HTTOPLEFT = 13
+    HTTOPRIGHT = 14
+    HTBOTTOM = 15
+    HTBOTTOMLEFT = 16
+    HTBOTTOMRIGHT = 17
+    WS_THICKFRAME = 0x00040000
+    # SetWindowPos 标志组合：仅刷新窗口 frame，不改变位置/大小/层级
+    _SWP_FRAME_ONLY = 0x0001 | 0x0002 | 0x0004 | 0x0010 | 0x0020
 
 # ============================================================
 # 主窗口
@@ -56,6 +77,7 @@ class MainWindow(QWidget):
         # ---- 无边框窗口 ----
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Window)
         self.setAttribute(Qt.WA_TranslucentBackground, True)
+        self._enableNativeResize()
 
         # ---- bodyFrame 圆角裁剪（防止子控件突出） ----
         self.ui.bodyFrame.installEventFilter(self)
@@ -72,6 +94,7 @@ class MainWindow(QWidget):
 
         # ---- 标题栏拖拽 & 双击最大化 ----
         self._dragHelper = TitleBarDragHelper(self.ui.titleBar, self, self._toggleMaximize)
+        self._updateWindowStyle()
 
         # ---- 创建子页面 ----
         self.eventListPage = EventListPage()
@@ -199,12 +222,77 @@ class MainWindow(QWidget):
             widget.setProperty("windowMaximized", maximized)
             _polishWidget(widget)
 
+    def _enableNativeResize(self):
+        """在 Windows 下恢复无边框窗口的原生可缩放样式，并缓存命中测试所需的系统指标"""
+        if not IS_WINDOWS:
+            return
+
+        self._hwnd = int(self.winId())
+        style = ctypes.windll.user32.GetWindowLongW(self._hwnd, GWL_STYLE)
+        style |= WS_THICKFRAME
+        ctypes.windll.user32.SetWindowLongW(self._hwnd, GWL_STYLE, style)
+        ctypes.windll.user32.SetWindowPos(
+            self._hwnd, 0, 0, 0, 0, 0, _SWP_FRAME_ONLY,
+        )
+
+        # 系统边框指标在进程生命周期内不变，缓存避免每次 nativeEvent 重复查询
+        _getMetric = ctypes.windll.user32.GetSystemMetrics
+        padded = _getMetric(92)   # SM_CXPADDEDBORDER
+        self._resizeBorderX = max(8, _getMetric(32) + padded)  # SM_CXSIZEFRAME
+        self._resizeBorderY = max(8, _getMetric(33) + padded)  # SM_CYSIZEFRAME
+
     def changeEvent(self, event):
         """窗口状态变化时同步更新按钮和样式"""
         super().changeEvent(event)
         if event.type() == QEvent.Type.WindowStateChange:
             self._updateMaximizeButton()
             self._updateWindowStyle()
+
+    def nativeEvent(self, eventType, message):
+        """在 Windows 下通过原生命中测试支持无边框窗口拖拽缩放"""
+        if not IS_WINDOWS or self.isMaximized() or self.isFullScreen():
+            return super().nativeEvent(eventType, message)
+
+        msg = ctypes.wintypes.MSG.from_address(int(message))
+        if msg.message != WM_NCHITTEST:
+            return super().nativeEvent(eventType, message)
+
+        rect = ctypes.wintypes.RECT()
+        ctypes.windll.user32.GetWindowRect(self._hwnd, ctypes.byref(rect))
+
+        bx, by = self._resizeBorderX, self._resizeBorderY
+        margins = self.ui.rootLayout.contentsMargins()
+        frameLeft = rect.left + margins.left()
+        frameTop = rect.top + margins.top()
+        frameRight = rect.right - margins.right()
+        frameBottom = rect.bottom - margins.bottom()
+
+        x = ctypes.c_short(msg.lParam & 0xFFFF).value
+        y = ctypes.c_short((msg.lParam >> 16) & 0xFFFF).value
+
+        left = frameLeft <= x < frameLeft + bx
+        right = frameRight - bx <= x < frameRight
+        top = frameTop <= y < frameTop + by
+        bottom = frameBottom - by <= y < frameBottom
+
+        if top and left:
+            return True, HTTOPLEFT
+        if top and right:
+            return True, HTTOPRIGHT
+        if bottom and left:
+            return True, HTBOTTOMLEFT
+        if bottom and right:
+            return True, HTBOTTOMRIGHT
+        if left:
+            return True, HTLEFT
+        if right:
+            return True, HTRIGHT
+        if top:
+            return True, HTTOP
+        if bottom:
+            return True, HTBOTTOM
+
+        return super().nativeEvent(eventType, message)
 
     # ---- 窗口唤醒 ----
 
