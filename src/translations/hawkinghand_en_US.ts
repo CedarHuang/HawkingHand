@@ -199,7 +199,22 @@ This action cannot be undone.</source>
     </message>
 </context>
 <context>
+    <name>LogPage</name>
+    <message>
+        <source>Logs</source>
+        <translation></translation>
+    </message>
+    <message>
+        <source>Clear</source>
+        <translation></translation>
+    </message>
+</context>
+<context>
     <name>MainWindow</name>
+    <message>
+        <source>Logs</source>
+        <translation></translation>
+    </message>
     <message>
         <source>Events</source>
         <translation></translation>

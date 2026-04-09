@@ -9,34 +9,41 @@ app_log_file_path = os.path.join(common.root_path(), 'app.log')
 # 脚本日志文件路径
 script_log_file_path = os.path.join(common.config_path(), 'scripts.log')
 
+# 统一日志格式
+_LOG_FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+
+
 class IndentedFormatter(logging.Formatter):
     def formatException(self, ei):
         return f'{super().formatException(ei)}\n'
+
 
 def log_level():
     if common.is_frozen():
         return logging.INFO
     return logging.DEBUG
 
-def create_logger(name, path):
-    level = log_level()
 
+def _install_handler(logger: logging.Logger, handler: logging.Handler):
+    handler.setLevel(log_level())
+    handler.setFormatter(IndentedFormatter(_LOG_FORMAT))
+    logger.addHandler(handler)
+
+
+def _create_logger(name: str, path: str) -> logging.Logger:
     logger = logging.getLogger(name)
-    logger.setLevel(level)
+    logger.setLevel(log_level())
 
-    formatter = IndentedFormatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-
-    file_handler = logging.FileHandler(path, encoding='utf-8')
-    file_handler.setLevel(level)
-    file_handler.setFormatter(formatter)
-    logger.addHandler(file_handler)
-
-    console_handler = logging.StreamHandler(sys.stdout)
-    console_handler.setLevel(level)
-    console_handler.setFormatter(formatter)
-    logger.addHandler(console_handler)
+    _install_handler(logger, logging.FileHandler(path, encoding='utf-8'))
+    _install_handler(logger, logging.StreamHandler(sys.stdout))
 
     return logger
 
-app = create_logger('app', app_log_file_path)
-script = create_logger('script', script_log_file_path)
+
+app = _create_logger('app', app_log_file_path)
+script = _create_logger('script', script_log_file_path)
+
+
+def install_ui_handler(handler: logging.Handler):
+    _install_handler(app, handler)
+    _install_handler(script, handler)

@@ -42,6 +42,7 @@ from core import event_listener
 from core import foreground_listener
 from core import single_instance
 from core.config import settings as configSettings
+from core.scripts import script_observer
 from resources import resources_rc  # noqa: F401  注册 Qt 资源
 from views.appearance import applyTheme, resolveTheme, installTranslator
 from views.main_window import MainWindow
@@ -83,11 +84,13 @@ def main():
     # 启动后台监听
     foreground_listener.start()
     event_listener.start()
+    script_observer.start()
 
     # 进入事件循环
     exitCode = app.exec()
 
     # 退出时清理
+    script_observer.stop()
     event_listener.stop()
     foreground_listener.stop()
     window.cleanupTray()

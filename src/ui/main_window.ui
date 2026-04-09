@@ -269,6 +269,25 @@
           </widget>
          </item>
          <item>
+          <widget class="QPushButton" name="navBtnLogs">
+           <property name="minimumSize">
+            <size>
+             <width>0</width>
+             <height>40</height>
+            </size>
+           </property>
+           <property name="text">
+            <string notr="true">📜</string>
+           </property>
+           <property name="checkable">
+            <bool>true</bool>
+           </property>
+           <property name="flat">
+            <bool>true</bool>
+           </property>
+          </widget>
+         </item>
+         <item>
           <spacer name="navSpacer">
            <property name="orientation">
             <enum>Qt::Vertical</enum>
@@ -327,6 +346,7 @@
         <widget class="QWidget" name="eventListPage"/>
         <widget class="QWidget" name="eventEditPage"/>
         <widget class="QWidget" name="settingsPage"/>
+        <widget class="QWidget" name="logPage"/>
        </widget>
       </item>
      </layout>

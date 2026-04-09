@@ -109,6 +109,7 @@ class NavBarController:
     # 模块加载时翻译器尚未安装，translate 返回原始英文字符串，作为翻译键使用
     NAV_ITEMS = {
         "navBtnEvents": ("📋", QCoreApplication.translate("MainWindow", "Events")),
+        "navBtnLogs": ("📜", QCoreApplication.translate("MainWindow", "Logs")),
         "navBtnSettings": ("⚙", QCoreApplication.translate("MainWindow", "Settings")),
         "navBtnToggle": ("☰", QCoreApplication.translate("MainWindow", "Collapse")),
     }

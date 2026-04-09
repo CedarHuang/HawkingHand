@@ -13,7 +13,7 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QButtonGroup, QApplication,
 )
 
-from core import common
+from core import common, logger
 from core.callbacks import callbacks, CallbackEvent
 from core.config import settings as configSettings
 from ui.generated.ui_main_window import Ui_MainWindow
@@ -22,6 +22,7 @@ from views.appearance import applyTheme, resolveTheme
 from views.event_controller import EventController
 from views.event_edit_page import EventEditPage
 from views.event_list_page import EventListPage
+from views.log_page import LogPage
 from views.main_window_helpers import (
     TitleBarDragHelper, DoubleClickFilter, NavBarController,
 )
@@ -100,11 +101,13 @@ class MainWindow(QWidget):
         self.eventListPage = EventListPage()
         self.eventEditPage = EventEditPage()
         self.settingsPage = SettingsPage()
+        self.logPage = LogPage()
 
         # ---- 将子页面嵌入 contentStack ----
         self._embedPage(0, self.eventListPage)
         self._embedPage(1, self.eventEditPage)
         self._embedPage(2, self.settingsPage)
+        self._embedPage(3, self.logPage)
 
         # ---- 导航栏控制 ----
         self._navController = NavBarController(self.ui.navBar, self)
@@ -113,6 +116,7 @@ class MainWindow(QWidget):
         self._navGroup = QButtonGroup(self)
         self._navGroup.setExclusive(True)
         self._navGroup.addButton(self.ui.navBtnEvents, 0)
+        self._navGroup.addButton(self.ui.navBtnLogs, 3)
         self._navGroup.addButton(self.ui.navBtnSettings, 2)
         self._navGroup.idClicked.connect(self._onNavClicked)
 
@@ -145,6 +149,9 @@ class MainWindow(QWidget):
 
         # ---- 系统托盘 ----
         self._trayManager = TrayManager(self, self._onWakeup)
+
+        # ---- 注册日志 UI Handler ----
+        logger.install_ui_handler(self.logPage.handler)
 
         # ---- 初始显示事件列表页 ----
         self.ui.contentStack.setCurrentIndex(0)

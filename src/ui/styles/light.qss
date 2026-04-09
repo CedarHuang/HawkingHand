@@ -91,6 +91,7 @@ QFrame#navBar {
 
 /* 导航按钮 — 默认 */
 QPushButton#navBtnEvents,
+QPushButton#navBtnLogs,
 QPushButton#navBtnSettings {
     background-color: transparent;
     color: #696C77;
@@ -98,6 +99,7 @@ QPushButton#navBtnSettings {
 
 /* 导航按钮 — 悬停 */
 QPushButton#navBtnEvents:hover,
+QPushButton#navBtnLogs:hover,
 QPushButton#navBtnSettings:hover {
     background-color: #E4E4E6;
     color: #383A42;
@@ -105,6 +107,7 @@ QPushButton#navBtnSettings:hover {
 
 /* 导航按钮 — 选中态 */
 QPushButton#navBtnEvents:checked,
+QPushButton#navBtnLogs:checked,
 QPushButton#navBtnSettings:checked {
     background-color: #E0E7FA;
     color: #4078F2;
@@ -424,17 +427,20 @@ QSpinBox::down-arrow {
     image: url(:/icons/arrow-down-light.svg);
 }
 
-/* 取消按钮 */
-QPushButton#btnCancel {
+/* 取消按钮 / 次要操作按钮 */
+QPushButton#btnCancel,
+QPushButton#btnClearLog {
     background-color: #ECECEE;
     color: #696C77;
     border: 1px solid #D0D1D4;
 }
-QPushButton#btnCancel:hover {
+QPushButton#btnCancel:hover,
+QPushButton#btnClearLog:hover {
     background-color: #E0E0E2;
     color: #383A42;
 }
-QPushButton#btnCancel:pressed {
+QPushButton#btnCancel:pressed,
+QPushButton#btnClearLog:pressed {
     background-color: #D4D4D6;
 }
 
@@ -512,6 +518,35 @@ QLabel#aboutCopyright {
 
 QLabel#aboutGithub {
     color: #4078F2;
+}
+
+/* ============================================================
+ * 日志页
+ * ============================================================ */
+
+/* 日志卡片容器 — 与 EventCard / formGroup 同级卡片 */
+QFrame#logCardFrame {
+    background-color: #FFFFFF;
+    border: 1px solid #E5E5E8;
+}
+
+/* 日志文本区域 — 背景略深于卡片，营造内嵌感 */
+QPlainTextEdit#logTextArea {
+    background-color: #F5F5F6;
+    color: #383A42;
+    selection-background-color: #B4D5FE;
+    selection-color: #383A42;
+}
+
+/* 日志级别颜色（供 LogPage qproperty 使用）
+ * 注意：选择器 LogPage#LogPage 依赖 .ui 文件中 widget 的 objectName 为 "LogPage"，
+ * 若 .ui 中修改了名称，此处需同步更新。 */
+LogPage#LogPage {
+    qproperty-logColorDebug: #A0A1A7;
+    qproperty-logColorInfo: #383A42;
+    qproperty-logColorWarning: #C18401;
+    qproperty-logColorError: #E45649;
+    qproperty-logColorCritical: #E45649;
 }
 
 /* ============================================================

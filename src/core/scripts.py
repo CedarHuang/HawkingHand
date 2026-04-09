@@ -95,7 +95,6 @@ class ScriptObserver(watchdog.events.FileSystemEventHandler):
         logger.script.debug(f'Stopped observing scripts directory: {common.scripts_path()}')
 
 script_observer = ScriptObserver()
-script_observer.start()
 
 class ScriptContext(dict):
     # 用户脚本中import的查找路径

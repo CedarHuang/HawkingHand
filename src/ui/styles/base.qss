@@ -92,6 +92,7 @@ QFrame#navBar[windowMaximized="true"] {
 }
 
 QPushButton#navBtnEvents,
+QPushButton#navBtnLogs,
 QPushButton#navBtnSettings {
     border: none;
     border-radius: 6px;
@@ -102,6 +103,7 @@ QPushButton#navBtnSettings {
 }
 
 QPushButton#navBtnEvents:checked,
+QPushButton#navBtnLogs:checked,
 QPushButton#navBtnSettings:checked {
     border-top-left-radius: 0px;
     border-bottom-left-radius: 0px;
@@ -399,8 +401,9 @@ QPushButton#btnOpenScriptsDir {
     font-size: 14px;
 }
 
-/* 底部操作按钮 */
-QPushButton#btnCancel {
+/* 底部操作按钮 / 次要操作按钮 */
+QPushButton#btnCancel,
+QPushButton#btnClearLog {
     border-radius: 8px;
     font-size: 13px;
     font-weight: 500;
@@ -470,6 +473,25 @@ QLabel#aboutCopyright {
 
 QLabel#aboutGithub {
     font-size: 12px;
+}
+
+/* ============================================================
+ * 日志页 (LogPage)
+ * ============================================================ */
+
+/* 日志卡片容器 — 与 EventCard / formGroup 同级圆角卡片 */
+QFrame#logCardFrame {
+    border-radius: 10px;
+    border: 1px solid transparent;
+}
+
+/* 日志文本区域 */
+QPlainTextEdit#logTextArea {
+    border: none;
+    border-radius: 10px;
+    font-size: 12px;
+    line-height: 1.5;
+    padding: 12px 16px;
 }
 
 /* ============================================================
