@@ -62,6 +62,9 @@ class TrayManager(QObject):
 
         # 右键菜单
         menu = QMenu()
+        # 移除 Qt 自动添加的 QGraphicsDropShadowEffect（偏移右下，导致圆角右下角露黑边）
+        menu.aboutToShow.connect(lambda: menu.setGraphicsEffect(None))
+
         actShow = QAction(self.tr("Show"), menu)
         actShow.triggered.connect(self._wakeupCallback)
         menu.addAction(actShow)
