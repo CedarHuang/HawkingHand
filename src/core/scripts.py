@@ -4,7 +4,6 @@ import importlib
 import importlib.util
 import inspect
 import os
-import time
 import watchdog.events
 import watchdog.observers
 
@@ -53,34 +52,30 @@ class ScriptObserver(watchdog.events.FileSystemEventHandler):
         super().__init__()
         self.observer = watchdog.observers.Observer()
         self.observer.schedule(self, common.scripts_path(), recursive=True)
-        self.init_time = time.time()
-        self.last_modified_times = {
+        self._known_mtimes = {
             # key: file path
-            # value: last modified time
+            # value: 上次处理时的 mtime
         }
 
     def on_modified(self, event):
-        current_time = time.time()
-
-        # 忽略启动前 2 秒的 on_modified 事件
-        if current_time - self.init_time < 2.0:
-            return
-
         if event.is_directory or not event.src_path.endswith('.py'):
             return
 
         path = os.path.realpath(event.src_path)
 
-        if path in self.last_modified_times:
-            time_since_last = current_time - self.last_modified_times[path]
-            if time_since_last < 0.5:
-                return
-
-        self.last_modified_times[path] = current_time
-
         instance = ScriptCode.instances.get(path)
         if not instance:
             return
+
+        # 仅当文件实际修改时间变化时才 reload（过滤读取触发的伪事件）
+        try:
+            mtime = os.path.getmtime(path)
+        except OSError:
+            return
+
+        if self._known_mtimes.get(path) == mtime:
+            return
+        self._known_mtimes[path] = mtime
 
         instance.reload()
         logger.script.info(f'File "{path}" has been modified, reload!')
