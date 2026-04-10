@@ -139,6 +139,8 @@ class EventEditPage(QWidget):
         self._isEditing = False
         # 表单是否有修改
         self._isDirty = False
+        # 批量设置表单时暂停脏追踪，避免程序化赋值误触发
+        self._suspendDirtyTracking = False
 
         # ---- 类型分段按钮互斥组 ----
         self._typeGroup = QButtonGroup(self)
@@ -194,8 +196,8 @@ class EventEditPage(QWidget):
         Args:
             isEditing: True=编辑模式, False=新建模式
         """
+        self._suspendDirtyTracking = True
         self._isEditing = isEditing
-        self._isDirty = False
 
         # 更新标题
         self.ui.pageTitle.setText(
@@ -219,12 +221,16 @@ class EventEditPage(QWidget):
         # 应用类型联动
         self._applyType("Click")
 
+        self._isDirty = False
+        self._suspendDirtyTracking = False
+
     def setFormData(self, data: dict):
         """用数据填充表单
 
         Args:
             data: 包含 type, hotkey, target, scope, posX, posY, interval, clicks 的字典
         """
+        self._suspendDirtyTracking = True
         self._isEditing = True
         self.ui.pageTitle.setText(self.tr("Edit Event"))
 
@@ -265,6 +271,7 @@ class EventEditPage(QWidget):
                 self.ui.scriptCombo.setCurrentIndex(idx)
 
         self._isDirty = False
+        self._suspendDirtyTracking = False
 
     def setScriptList(self, scripts: list[str]):
         """设置脚本下拉列表
@@ -272,8 +279,10 @@ class EventEditPage(QWidget):
         Args:
             scripts: 脚本名称列表（不含 .py 后缀）
         """
+        self._suspendDirtyTracking = True
         self.ui.scriptCombo.clear()
         self.ui.scriptCombo.addItems(scripts)
+        self._suspendDirtyTracking = False
 
     # ---- 内部方法 ----
 
@@ -378,8 +387,9 @@ class EventEditPage(QWidget):
         _polishWidget(self.ui.buttonCombo)
 
     def _markDirty(self, *_args):
-        """标记表单已修改"""
-        self._isDirty = True
+        """标记表单已修改（批量设置期间自动跳过）"""
+        if not self._suspendDirtyTracking:
+            self._isDirty = True
 
     def _initButtonComboData(self):
         """为 buttonCombo 的预设选项设置 itemData（内部值），使其不受翻译影响
