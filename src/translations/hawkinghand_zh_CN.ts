@@ -122,6 +122,14 @@
         <translation>范围</translation>
     </message>
     <message>
+        <source>Trigger</source>
+        <translation>触发</translation>
+    </message>
+    <message>
+        <source>Trigger on key release</source>
+        <translation>松开按键时触发</translation>
+    </message>
+    <message>
         <source>process:window (e.g. chrome.exe:*)</source>
         <translation>进程名:窗口标题（如 chrome.exe:*）</translation>
     </message>

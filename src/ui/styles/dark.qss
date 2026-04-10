@@ -430,6 +430,21 @@ QSpinBox::down-arrow {
     image: url(:/icons/arrow-down-dark.svg);
 }
 
+/* 编辑页触发方式开关（ToggleSwitch 自绘） */
+ToggleSwitch#triggerOnReleaseCheck {
+    qproperty-trackColorOff: #3E4451;
+    qproperty-trackColorOn: #61AFEF;
+    qproperty-thumbColor: #FFFFFF;
+    qproperty-trackColorOffHover: #4B5263;
+    qproperty-trackColorOnHover: #74BAF2;
+}
+
+/* 编辑页触发方式描述文字 */
+QLabel#triggerOnReleaseText {
+    color: #ABB2BF;
+    font-size: 13px;
+}
+
 /* 取消按钮 / 次要操作按钮 */
 QPushButton#btnCancel,
 QPushButton#btnClearLog {

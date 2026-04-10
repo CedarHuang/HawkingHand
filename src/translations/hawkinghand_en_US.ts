@@ -122,6 +122,14 @@
         <translation></translation>
     </message>
     <message>
+        <source>Trigger</source>
+        <translation></translation>
+    </message>
+    <message>
+        <source>Trigger on key release</source>
+        <translation></translation>
+    </message>
+    <message>
         <source>process:window (e.g. chrome.exe:*)</source>
         <translation></translation>
     </message>

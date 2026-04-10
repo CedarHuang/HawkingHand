@@ -169,6 +169,7 @@ class EventEditPage(QWidget):
         # ---- 表单变更追踪 ----
         self.ui.hotkeyInput.textChanged.connect(self._markDirty)
         self.ui.scopeInput.textChanged.connect(self._markDirty)
+        self.ui.triggerOnReleaseCheck.toggled.connect(self._markDirty)
         self.ui.buttonCombo.currentTextChanged.connect(self._markDirty)
         self.ui.scriptCombo.currentTextChanged.connect(self._markDirty)
         self.ui.positionX.valueChanged.connect(self._markDirty)
@@ -206,6 +207,7 @@ class EventEditPage(QWidget):
         self.ui.hotkeyInput.clear()
         self.ui.buttonCombo.setCurrentIndex(0)
         self.ui.scopeInput.clear()
+        self.ui.triggerOnReleaseCheck.setChecked(False)
         self.ui.positionX.setValue(-1)
         self.ui.positionY.setValue(-1)
         self.ui.intervalInput.setValue(100)
@@ -247,6 +249,8 @@ class EventEditPage(QWidget):
         # scope 为 "*" 或空时显示为空，让 placeholder 提示用户格式
         scopeVal = data.get("scope", "")
         self.ui.scopeInput.setText("" if scopeVal in ("", "*") else scopeVal)
+
+        self.ui.triggerOnReleaseCheck.setChecked(data.get("trigger_on_release", False))
 
         self.ui.positionX.setValue(data.get("posX", -1))
         self.ui.positionY.setValue(data.get("posY", -1))
@@ -324,6 +328,7 @@ class EventEditPage(QWidget):
             "hotkey": self.ui.hotkeyInput.text().strip(),
             "target": self._getButtonComboValue(),
             "scope": self.ui.scopeInput.text().strip(),
+            "trigger_on_release": self.ui.triggerOnReleaseCheck.isChecked(),
             "posX": self.ui.positionX.value(),
             "posY": self.ui.positionY.value(),
             "interval": self.ui.intervalInput.value(),

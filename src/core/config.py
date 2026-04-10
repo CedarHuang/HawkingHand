@@ -8,7 +8,7 @@ from core.callbacks import callbacks, CallbackEvent
 from core.models import Event, Settings
 
 
-class EventManager(list):
+class EventManager(list[Event]):
     def __init__(self):
         super().__init__()
         try:

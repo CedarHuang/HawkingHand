@@ -8,13 +8,45 @@ from core import config
 from core import foreground_listener
 from core.scripts import scripts
 
+def _wrap_trigger_on_release(callback, keys):
+    # 热键按下时挂起，所有键都释放后触发。
+    # 为每个键注册持久 hook，按下热键时将所有键加入待释放集合，
+    # 逐个释放时移除，集合清空时触发回调。
+    remaining = set()
+
+    def make_on_key(key):
+        def on_key(event):
+            if event.event_type == keyboard.KEY_UP and key in remaining:
+                remaining.discard(key)
+                if not remaining:
+                    callback()
+        return on_key
+
+    for key in keys:
+        keyboard.hook_key(key, make_on_key(key))
+
+    def on_press():
+        remaining.update(keys)
+
+    return on_press
+
 def start():
     for event in config.events:
         if not event.enabled:
             continue
         if event.hotkey == None or event.hotkey == '':
             continue
-        keyboard.add_hotkey(event.hotkey, callback_factory(event))
+
+        callback = callback_factory(event)
+
+        if event.trigger_on_release:
+            # keyboard 库的 trigger_on_release 参数存在 bug
+            # nonblocking hotkeys 在 KEY_UP 时 _pressed_events 已被清空导致 hotkey 匹配失败
+            # 因此需要自行实现一个 workaround
+            keys = [k.strip() for k in event.hotkey.split('+')]
+            callback = _wrap_trigger_on_release(callback, keys)
+
+        keyboard.add_hotkey(event.hotkey, callback)
 
 def stop():
     keyboard.unhook_all()

@@ -148,6 +148,7 @@ class EventController:
             "hotkey": event.hotkey or "",
             "target": event.target or MOUSE_LEFT,
             "scope": event.scope or "*",
+            "trigger_on_release": event.trigger_on_release,
             "posX": event.posX,
             "posY": event.posY,
             "interval": event.interval if event.interval is not None else 100,
@@ -199,11 +200,14 @@ class EventController:
             target = data.get("target", MOUSE_LEFT)
             params = ClickParams(position=[posX, posY])
 
+        trigger_on_release = data.get("trigger_on_release", False)
+
         event = Event(
             type=eventType,
             hotkey=hotkey,
             target=target,
             scope=scopeVal,
+            trigger_on_release=trigger_on_release,
             enabled=enabled,
             params=params,
         )

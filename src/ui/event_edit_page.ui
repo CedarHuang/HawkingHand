@@ -522,6 +522,68 @@
             </item>
            </layout>
           </item>
+          <item>
+           <layout class="QHBoxLayout" name="triggerOnReleaseRow">
+            <property name="spacing">
+             <number>12</number>
+            </property>
+            <item>
+             <widget class="QLabel" name="triggerOnReleaseLabel">
+              <property name="minimumSize">
+               <size>
+                <width>60</width>
+                <height>0</height>
+               </size>
+              </property>
+              <property name="text">
+               <string>Trigger</string>
+              </property>
+              <property name="role" stdset="0">
+               <string notr="true">fieldLabel</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="ToggleSwitch" name="triggerOnReleaseCheck">
+              <property name="minimumSize">
+               <size>
+                <width>40</width>
+                <height>22</height>
+               </size>
+              </property>
+              <property name="maximumSize">
+               <size>
+                <width>40</width>
+                <height>22</height>
+               </size>
+              </property>
+              <property name="checkable">
+               <bool>true</bool>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QLabel" name="triggerOnReleaseText">
+              <property name="text">
+               <string>Trigger on key release</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <spacer name="triggerOnReleaseSpacer">
+              <property name="orientation">
+               <enum>Qt::Horizontal</enum>
+              </property>
+              <property name="sizeHint" stdset="0">
+               <size>
+                <width>40</width>
+                <height>20</height>
+               </size>
+              </property>
+             </spacer>
+            </item>
+           </layout>
+          </item>
          </layout>
         </widget>
        </item>
@@ -884,6 +946,13 @@
    </item>
   </layout>
  </widget>
+ <customwidgets>
+  <customwidget>
+   <class>ToggleSwitch</class>
+   <extends>QAbstractButton</extends>
+   <header>views.toggle_switch</header>
+  </customwidget>
+ </customwidgets>
  <resources/>
  <connections/>
 </ui>
