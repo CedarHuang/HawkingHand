@@ -11,7 +11,7 @@ import json
 
 from PySide6.QtCore import Qt, QRegularExpression, QFile, QIODevice
 from PySide6.QtGui import QFontMetricsF, QPainter, QTextCursor
-from PySide6.QtWidgets import QTextEdit
+from PySide6.QtWidgets import QListView, QTextEdit
 
 from pyqcodeeditor import utils as qce_utils
 from pyqcodeeditor.highlighters.QHighlightBlockRule import QHighlightBlockRule
@@ -378,16 +378,20 @@ class PythonCodeEditor(QCodeEditor):
 
         应在 setCompleter() 之后调用。
         """
-        popup = self.completer().popup()
-        if not popup:
+        completer = self.completer()
+        if not completer:
             return
 
+        # 使用支持循环导航的自定义 popup 替换默认 popup
+        popup = _WrapAroundListView()
+        completer.setPopup(popup)
+
         # 设置窗口属性以支持圆角和纤细描边（去除系统默认窗口框架）
-        popupWindow = popup.window()
-        if popupWindow and popupWindow is not popup:
-            popupWindow.setWindowFlag(Qt.FramelessWindowHint, True)
-            popupWindow.setWindowFlag(Qt.NoDropShadowWindowHint, True)
-            popupWindow.setAttribute(Qt.WA_TranslucentBackground, True)
+        # popup 作为顶层弹出窗口，需要在其自身或其 window() 上设置
+        target = popup.window()
+        target.setWindowFlag(Qt.FramelessWindowHint, True)
+        target.setWindowFlag(Qt.NoDropShadowWindowHint, True)
+        target.setAttribute(Qt.WA_TranslucentBackground, True)
 
     # ---- 工具方法 ----
 
@@ -463,3 +467,34 @@ class FixedLineNumberArea(_QLineNumberArea):
                 docLayout.blockBoundingRect(block).height()
             )
             blockNumber += 1
+
+
+# ============================================================
+# 补全弹窗循环导航支持
+# ============================================================
+
+class _WrapAroundListView(QListView):
+    """支持循环导航的 QListView，用作 QCompleter 的 popup
+
+    QCompleter 的 event filter 在边界处（第一项按上键 / 最后一项按下键）
+    会将 currentIndex 设为无效（row=-1），导致选中态消失，需要额外按一次
+    键才能跳到对端。此子类拦截这一行为，在 currentIndex 变为无效时立即
+    跳转到对端，实现无缝循环导航。
+    """
+
+    def currentChanged(self, current, previous):
+        super().currentChanged(current, previous)
+        if current.isValid() or not previous.isValid():
+            return
+        # currentIndex 从有效变为无效（-1），说明到达边界
+        model = self.model()
+        if model is None or model.rowCount() == 0:
+            return
+        rowCount = model.rowCount()
+        prevRow = previous.row()
+        if prevRow == 0:
+            # 从第一项越界 → 跳到最后一项
+            self.setCurrentIndex(model.index(rowCount - 1, 0))
+        elif prevRow == rowCount - 1:
+            # 从最后一项越界 → 跳到第一项
+            self.setCurrentIndex(model.index(0, 0))
