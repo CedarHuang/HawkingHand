@@ -9,7 +9,7 @@ Python 代码编辑器组件
 
 import json
 
-from PySide6.QtCore import Qt, QRegularExpression, QFile, QIODevice
+from PySide6.QtCore import Qt, QPointF, QRectF, QRegularExpression, QFile, QIODevice
 from PySide6.QtGui import QFontMetricsF, QPainter, QTextCursor
 from PySide6.QtWidgets import QListView, QTextEdit
 
@@ -392,6 +392,80 @@ class PythonCodeEditor(QCodeEditor):
         target.setWindowFlag(Qt.FramelessWindowHint, True)
         target.setWindowFlag(Qt.NoDropShadowWindowHint, True)
         target.setAttribute(Qt.WA_TranslucentBackground, True)
+
+    # ---- 空白字符可视化 ----
+
+    def paintEvent(self, event, **kwargs):
+        """在父类绘制完成后，用淡色叠加绘制可见区域内的空白字符
+
+        空格绘制为居中小点 ·，Tab 绘制为右箭头 →。
+        颜色取自语法主题的 VisualWhitespace 定义，不会像 Qt 原生
+        ShowTabsAndSpaces 那样跟随文本前景色导致过于显眼。
+        """
+        super().paintEvent(event)
+
+        # 获取 VisualWhitespace 颜色，未定义则不绘制
+        fmt = self._syntaxStyle.getFormat("VisualWhitespace")
+        color = fmt.foreground().color()
+        if not color.isValid():
+            return
+
+        painter = QPainter(self.viewport())
+        painter.setPen(color)
+        painter.setFont(self.font())
+
+        fm = QFontMetricsF(self.font())
+        spaceWidth = fm.horizontalAdvance(' ')
+        dot = '·'
+
+        doc = self.document()
+        docLayout = doc.documentLayout()
+        scrollY = self.verticalScrollBar().value()
+        viewportRect = self.viewport().rect()
+
+        # 从第一个可见块开始遍历
+        blockNumber = self._getFirstVisibleBlock()
+        block = doc.findBlockByNumber(blockNumber)
+
+        while block.isValid():
+            blockRect = docLayout.blockBoundingRect(block)
+            # 将文档坐标转换为 viewport 坐标（减去滚动偏移）
+            top = blockRect.top() - scrollY
+            height = blockRect.height()
+            if top > viewportRect.bottom():
+                break
+            if block.isVisible() and top + height >= viewportRect.top():
+                text = block.text()
+                tabDist = self.tabStopDistance()
+                leftOffset = blockRect.left()  # 文档内容区域的左侧偏移（含文档边距）
+                x = 0.0  # 相对于文本起始位置的累计偏移
+                for ch in text:
+                    if ch == ' ':
+                        charRect = QRectF(leftOffset + x, top, spaceWidth, height)
+                        painter.drawText(charRect, Qt.AlignCenter, dot)
+                        x += spaceWidth
+                    elif ch == '\t':
+                        # 对齐到下一个 tab stop
+                        nextStop = (int(x / tabDist) + 1) * tabDist
+                        tabWidth = nextStop - x
+                        # 绘制占满 Tab 宽度的箭头线：—————→
+                        padding = spaceWidth * 0.3  # 左右留少量内边距
+                        midY = top + height / 2.0
+                        lineX1 = leftOffset + x + padding
+                        lineX2 = leftOffset + x + tabWidth - padding
+                        arrowSize = min(spaceWidth * 0.35, tabWidth * 0.15)
+                        painter.drawLine(QPointF(lineX1, midY), QPointF(lineX2, midY))
+                        # 箭头尖（右端两条短斜线）
+                        painter.drawLine(QPointF(lineX2, midY),
+                                         QPointF(lineX2 - arrowSize, midY - arrowSize))
+                        painter.drawLine(QPointF(lineX2, midY),
+                                         QPointF(lineX2 - arrowSize, midY + arrowSize))
+                        x = nextStop
+                    else:
+                        x += fm.horizontalAdvance(ch)
+            block = block.next()
+
+        painter.end()
 
     # ---- 工具方法 ----
 
