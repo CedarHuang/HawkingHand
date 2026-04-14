@@ -228,6 +228,10 @@ This action cannot be undone.</source>
         <translation></translation>
     </message>
     <message>
+        <source>Scripts</source>
+        <translation></translation>
+    </message>
+    <message>
         <source>Settings</source>
         <translation></translation>
     </message>
@@ -237,6 +241,119 @@ This action cannot be undone.</source>
     </message>
     <message>
         <source>Toggle navigation bar</source>
+        <translation></translation>
+    </message>
+</context>
+<context>
+    <name>ScriptCard</name>
+    <message>
+        <source>✏️  Edit</source>
+        <translation></translation>
+    </message>
+    <message>
+        <source>📋  Copy</source>
+        <translation></translation>
+    </message>
+    <message>
+        <source>🗑️  Delete</source>
+        <translation></translation>
+    </message>
+    <message>
+        <source>More actions</source>
+        <translation></translation>
+    </message>
+</context>
+<context>
+    <name>ScriptController</name>
+    <message>
+        <source>New Script</source>
+        <translation></translation>
+    </message>
+    <message>
+        <source>Script name (letters, digits, underscores):</source>
+        <translation></translation>
+    </message>
+    <message>
+        <source>Invalid Name</source>
+        <translation></translation>
+    </message>
+    <message>
+        <source>Script name can only contain letters, digits, and underscores, and cannot start with a digit.</source>
+        <translation></translation>
+    </message>
+    <message>
+        <source>Name Conflict</source>
+        <translation></translation>
+    </message>
+    <message>
+        <source>A script named &apos;{name}&apos; already exists.</source>
+        <translation></translation>
+    </message>
+    <message>
+        <source>Error</source>
+        <translation></translation>
+    </message>
+    <message>
+        <source>Failed to create script file.</source>
+        <translation></translation>
+    </message>
+    <message>
+        <source>Failed to copy script file.</source>
+        <translation></translation>
+    </message>
+    <message>
+        <source>Delete Script</source>
+        <translation></translation>
+    </message>
+    <message>
+        <source>Are you sure you want to delete &apos;{name}&apos;?
+This action cannot be undone.</source>
+        <translation></translation>
+    </message>
+    <message>
+        <source>Failed to delete script file.</source>
+        <translation></translation>
+    </message>
+    <message>
+        <source>Unsaved Changes</source>
+        <translation></translation>
+    </message>
+    <message>
+        <source>You have unsaved changes. Do you want to save before leaving?</source>
+        <translation></translation>
+    </message>
+</context>
+<context>
+    <name>ScriptEditPage</name>
+    <message>
+        <source>Back to script list</source>
+        <translation></translation>
+    </message>
+    <message>
+        <source>Save (Ctrl+S)</source>
+        <translation></translation>
+    </message>
+</context>
+<context>
+    <name>ScriptListPage</name>
+    <message>
+        <source>Script List</source>
+        <translation></translation>
+    </message>
+    <message>
+        <source>📂 Open</source>
+        <translation></translation>
+    </message>
+    <message>
+        <source>+ New</source>
+        <translation></translation>
+    </message>
+    <message>
+        <source>No scripts yet</source>
+        <translation></translation>
+    </message>
+    <message>
+        <source>+ Create your first script</source>
         <translation></translation>
     </message>
 </context>

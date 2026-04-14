@@ -11,6 +11,9 @@
         <file alias="base.qss">../ui/styles/base.qss</file>
         <file alias="dark.qss">../ui/styles/dark.qss</file>
         <file alias="light.qss">../ui/styles/light.qss</file>
+        <file alias="python_lang.json">../ui/styles/python_lang.json</file>
+        <file alias="syntax_dark.json">../ui/styles/syntax_dark.json</file>
+        <file alias="syntax_light.json">../ui/styles/syntax_light.json</file>
     </qresource>
 
     <qresource prefix="/translations">

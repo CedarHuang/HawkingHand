@@ -19,6 +19,7 @@ from core.config import settings as configSettings
 from ui.generated.ui_main_window import Ui_MainWindow
 from views import _polishWidget
 from views.appearance import applyTheme, resolveTheme
+from views.constants import PageIndex
 from views.event_controller import EventController
 from views.event_edit_page import EventEditPage
 from views.event_list_page import EventListPage
@@ -26,8 +27,11 @@ from views.log_page import LogPage
 from views.main_window_helpers import (
     TitleBarDragHelper, DoubleClickFilter, NavBarController,
 )
-from views.settings_page import SettingsPage
+from views.script_controller import ScriptController
+from views.script_edit_page import ScriptEditPage
+from views.script_list_page import ScriptListPage
 from views.settings_controller import SettingsController
+from views.settings_page import SettingsPage
 from views.tray import TrayManager
 
 IS_WINDOWS = sys.platform == "win32"
@@ -49,6 +53,7 @@ if IS_WINDOWS:
     WS_THICKFRAME = 0x00040000
     # SetWindowPos 标志组合：仅刷新窗口 frame，不改变位置/大小/层级
     _SWP_FRAME_ONLY = 0x0001 | 0x0002 | 0x0004 | 0x0010 | 0x0020
+
 
 # ============================================================
 # 主窗口
@@ -100,14 +105,18 @@ class MainWindow(QWidget):
         # ---- 创建子页面 ----
         self.eventListPage = EventListPage()
         self.eventEditPage = EventEditPage()
+        self.scriptListPage = ScriptListPage()
+        self.scriptEditPage = ScriptEditPage()
         self.settingsPage = SettingsPage()
         self.logPage = LogPage()
 
         # ---- 将子页面嵌入 contentStack ----
-        self._embedPage(0, self.eventListPage)
-        self._embedPage(1, self.eventEditPage)
-        self._embedPage(2, self.settingsPage)
-        self._embedPage(3, self.logPage)
+        self._embedPage(PageIndex.EVENT_LIST, self.eventListPage)
+        self._embedPage(PageIndex.EVENT_EDIT, self.eventEditPage)
+        self._embedPage(PageIndex.SCRIPT_LIST, self.scriptListPage)
+        self._embedPage(PageIndex.SCRIPT_EDIT, self.scriptEditPage)
+        self._embedPage(PageIndex.SETTINGS, self.settingsPage)
+        self._embedPage(PageIndex.LOG, self.logPage)
 
         # ---- 导航栏控制 ----
         self._navController = NavBarController(self.ui.navBar, self)
@@ -115,9 +124,10 @@ class MainWindow(QWidget):
         # ---- 导航按钮互斥 + 页面切换 ----
         self._navGroup = QButtonGroup(self)
         self._navGroup.setExclusive(True)
-        self._navGroup.addButton(self.ui.navBtnEvents, 0)
-        self._navGroup.addButton(self.ui.navBtnLogs, 3)
-        self._navGroup.addButton(self.ui.navBtnSettings, 2)
+        self._navGroup.addButton(self.ui.navBtnEvents, PageIndex.EVENT_LIST)
+        self._navGroup.addButton(self.ui.navBtnScripts, PageIndex.SCRIPT_LIST)
+        self._navGroup.addButton(self.ui.navBtnLogs, PageIndex.LOG)
+        self._navGroup.addButton(self.ui.navBtnSettings, PageIndex.SETTINGS)
         self._navGroup.idClicked.connect(self._onNavClicked)
 
         # ---- 导航栏展开/折叠按钮 ----
@@ -134,7 +144,14 @@ class MainWindow(QWidget):
             self.eventListPage, self.eventEditPage,
             self.ui.contentStack, self.ui.navBtnEvents,
         )
+        self._scriptCtrl = ScriptController(
+            self.scriptListPage, self.scriptEditPage,
+            self.ui.contentStack, self.ui.navBtnScripts,
+        )
         self._settingsCtrl = SettingsController(self.settingsPage)
+
+        # ---- 主题切换联动：设置页主题变更时同步更新脚本编辑器 ----
+        self.settingsPage.themeChanged.connect(self._onThemeChangedFromSettings)
 
         # ---- 主题快速切换（仅开发环境：双击版本号） ----
         if not common.is_frozen():
@@ -154,7 +171,7 @@ class MainWindow(QWidget):
         logger.install_ui_handler(self.logPage.handler)
 
         # ---- 初始显示事件列表页 ----
-        self.ui.contentStack.setCurrentIndex(0)
+        self.ui.contentStack.setCurrentIndex(PageIndex.EVENT_LIST)
 
     # ---- 公共方法 ----
 
@@ -192,6 +209,18 @@ class MainWindow(QWidget):
 
     def _onNavClicked(self, btnId: int):
         """导航按钮点击，切换到对应页面"""
+        # 如果当前在脚本编辑页，检查未保存修改
+        if self._scriptCtrl.isOnEditPage() and btnId != PageIndex.SCRIPT_EDIT:
+            if not self._scriptCtrl.checkUnsavedBeforeLeave():
+                # 用户取消，恢复导航按钮选中状态
+                self.ui.navBtnScripts.setChecked(True)
+                return
+
+        # 切换到脚本列表页时刷新列表
+        if btnId == PageIndex.SCRIPT_LIST:
+            self._scriptCtrl.goToScriptList()
+            return
+
         self.ui.contentStack.setCurrentIndex(btnId)
 
     # ---- 最大化 / 还原 ----
@@ -331,6 +360,16 @@ class MainWindow(QWidget):
         if app:
             self._currentTheme = "light" if self._currentTheme == "dark" else "dark"
             applyTheme(app, self._currentTheme)
+            # 同步更新脚本编辑器主题
+            self.scriptEditPage.updateTheme(self._currentTheme == "dark")
+
+    def _onThemeChangedFromSettings(self, theme: str):
+        """设置页主题变更时同步更新脚本编辑器主题"""
+        resolved = resolveTheme(theme)
+        self.scriptEditPage.updateTheme(resolved == "dark")
+        # 同步开发环境的主题状态
+        if hasattr(self, "_currentTheme"):
+            self._currentTheme = resolved
 
     # ---- 内部方法 ----
 

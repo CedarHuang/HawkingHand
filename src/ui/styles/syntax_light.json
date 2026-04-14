@@ -1,0 +1,144 @@
+{
+  "name": "One Light",
+  "style": [
+    {
+      "name": "Text",
+      "foreground": "#383A42",
+      "background": "#F8F8FA"
+    },
+    {
+      "name": "Link",
+      "foreground": "#4078F2"
+    },
+    {
+      "name": "Selection",
+      "background": "#B4D5FE"
+    },
+    {
+      "name": "LineNumber",
+      "foreground": "#A0A1A7"
+    },
+    {
+      "name": "SearchResult",
+      "background": "#FFEF0B"
+    },
+    {
+      "name": "SearchScope",
+      "background": "#E0E7FA"
+    },
+    {
+      "name": "Parentheses",
+      "background": "#E0E7FA"
+    },
+    {
+      "name": "ParenthesesMismatch",
+      "foreground": "#FFFFFF",
+      "background": "#E45649"
+    },
+    {
+      "name": "AutoComplete",
+      "foreground": "#4078F2",
+      "background": "#E0E7FA"
+    },
+    {
+      "name": "CurrentLine",
+      "background": "#F5F5F6"
+    },
+    {
+      "name": "CurrentLineNumber",
+      "foreground": "#383A42",
+      "bold": "true"
+    },
+    {
+      "name": "Occurrences",
+      "background": "#E0E7FA"
+    },
+    {
+      "name": "Number",
+      "foreground": "#C18401"
+    },
+    {
+      "name": "String",
+      "foreground": "#50A14F"
+    },
+    {
+      "name": "Type",
+      "foreground": "#4078F2"
+    },
+    {
+      "name": "Local",
+      "foreground": "#383A42"
+    },
+    {
+      "name": "Global",
+      "foreground": "#C18401"
+    },
+    {
+      "name": "Field",
+      "foreground": "#E45649"
+    },
+    {
+      "name": "Static",
+      "foreground": "#A626A4"
+    },
+    {
+      "name": "Function",
+      "foreground": "#4078F2"
+    },
+    {
+      "name": "Keyword",
+      "foreground": "#A626A4"
+    },
+    {
+      "name": "PrimitiveType",
+      "foreground": "#C18401"
+    },
+    {
+      "name": "Operator",
+      "foreground": "#383A42"
+    },
+    {
+      "name": "Label",
+      "foreground": "#E45649"
+    },
+    {
+      "name": "Comment",
+      "foreground": "#A0A1A7",
+      "italic": "true"
+    },
+    {
+      "name": "VisualWhitespace",
+      "foreground": "#D0D1D4"
+    },
+    {
+      "name": "DisabledCode",
+      "foreground": "#A0A1A7"
+    },
+    {
+      "name": "AddedLine",
+      "foreground": "#50A14F"
+    },
+    {
+      "name": "RemovedLine",
+      "foreground": "#E45649"
+    },
+    {
+      "name": "Warning",
+      "underlineColor": "#C18401",
+      "underlineStyle": "SingleUnderline"
+    },
+    {
+      "name": "Error",
+      "underlineColor": "#E45649",
+      "underlineStyle": "SingleUnderline"
+    },
+    {
+      "name": "Declaration",
+      "bold": "true"
+    },
+    {
+      "name": "FunctionDefinition",
+      "foreground": "#4078F2"
+    }
+  ]
+}

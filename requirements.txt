@@ -1,6 +1,7 @@
 keyboard==0.13.5
 nuitka==4.0.7
 psutil==6.1.0
+pyqcodeeditor==0.3.7
 PySide6==6.10.2
 pywin32==308
 watchdog==6.0.0

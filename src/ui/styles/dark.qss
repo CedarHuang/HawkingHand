@@ -93,6 +93,7 @@ QFrame#navBar {
 
 /* 导航按钮 — 默认 */
 QPushButton#navBtnEvents,
+QPushButton#navBtnScripts,
 QPushButton#navBtnLogs,
 QPushButton#navBtnSettings {
     background-color: transparent;
@@ -101,6 +102,7 @@ QPushButton#navBtnSettings {
 
 /* 导航按钮 — 悬停 */
 QPushButton#navBtnEvents:hover,
+QPushButton#navBtnScripts:hover,
 QPushButton#navBtnLogs:hover,
 QPushButton#navBtnSettings:hover {
     background-color: #2C313A;
@@ -109,6 +111,7 @@ QPushButton#navBtnSettings:hover {
 
 /* 导航按钮 — 选中态 */
 QPushButton#navBtnEvents:checked,
+QPushButton#navBtnScripts:checked,
 QPushButton#navBtnLogs:checked,
 QPushButton#navBtnSettings:checked {
     background-color: #2C313A;
@@ -143,30 +146,22 @@ QLabel#pageTitle {
 }
 
 /* 添加按钮 */
-QPushButton#btnAddEvent {
+QPushButton#btnAddEvent,
+QPushButton#btnAddFirstEvent {
     background-color: #61AFEF;
     color: #282C34;
 }
-QPushButton#btnAddEvent:hover {
+QPushButton#btnAddEvent:hover,
+QPushButton#btnAddFirstEvent:hover {
     background-color: #74BAF2;
 }
-QPushButton#btnAddEvent:pressed {
+QPushButton#btnAddEvent:pressed,
+QPushButton#btnAddFirstEvent:pressed {
     background-color: #4EA1E3;
 }
 
 QLabel#emptyText {
     color: #5C6370;
-}
-
-QPushButton#btnAddFirstEvent {
-    background-color: #61AFEF;
-    color: #282C34;
-}
-QPushButton#btnAddFirstEvent:hover {
-    background-color: #74BAF2;
-}
-QPushButton#btnAddFirstEvent:pressed {
-    background-color: #4EA1E3;
 }
 
 /* ============================================================
@@ -536,6 +531,78 @@ QLabel#aboutCopyright {
 
 QLabel#aboutGithub {
     color: #61AFEF;
+}
+
+/* ============================================================
+ * 脚本列表页
+ * ============================================================ */
+
+/* 打开脚本目录按钮（紧凑型） */
+QPushButton#btnOpenScriptsDirSmall {
+    background-color: transparent;
+    color: #ABB2BF;
+}
+QPushButton#btnOpenScriptsDirSmall:hover {
+    background-color: #353B45;
+    color: #D7DAE0;
+}
+
+/* 新建脚本按钮 & 空状态新建按钮 */
+QPushButton#btnNewScript,
+QPushButton#btnAddFirstScript {
+    background-color: #61AFEF;
+    color: #282C34;
+}
+QPushButton#btnNewScript:hover,
+QPushButton#btnAddFirstScript:hover {
+    background-color: #74BAF2;
+}
+QPushButton#btnNewScript:pressed,
+QPushButton#btnAddFirstScript:pressed {
+    background-color: #4EA1E3;
+}
+
+/* ============================================================
+ * 脚本卡片
+ * ============================================================ */
+
+QFrame#ScriptCard {
+    background-color: #2C313A;
+    border: 1px solid #3E4451;
+}
+QFrame#ScriptCard:hover {
+    border: 1px solid #4B5263;
+    background-color: #313640;
+}
+
+/* 脚本名称标签 */
+QLabel#scriptNameLabel {
+    color: #D7DAE0;
+}
+
+/* 文件信息标签 */
+QLabel#fileInfoLabel {
+    color: #5C6370;
+}
+
+/* ============================================================
+ * 脚本编辑页
+ * ============================================================ */
+
+/* 工具栏底部分隔线 */
+QFrame#scriptToolbar {
+    border-bottom: 1px solid #181A1F;
+}
+
+/* 脚本标题标签 */
+QLabel#scriptTitleLabel {
+    color: #D7DAE0;
+}
+
+/* 编辑器外框 */
+QFrame#editorFrame {
+    background-color: #2C313A;
+    border: 1px solid #3E4451;
 }
 
 /* ============================================================

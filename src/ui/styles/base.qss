@@ -92,6 +92,7 @@ QFrame#navBar[windowMaximized="true"] {
 }
 
 QPushButton#navBtnEvents,
+QPushButton#navBtnScripts,
 QPushButton#navBtnLogs,
 QPushButton#navBtnSettings {
     border: none;
@@ -103,6 +104,7 @@ QPushButton#navBtnSettings {
 }
 
 QPushButton#navBtnEvents:checked,
+QPushButton#navBtnScripts:checked,
 QPushButton#navBtnLogs:checked,
 QPushButton#navBtnSettings:checked {
     border-top-left-radius: 0px;
@@ -142,11 +144,15 @@ QLabel#pageTitle {
 }
 
 /* 添加事件按钮 */
-QPushButton#btnAddEvent {
+QPushButton#btnAddEvent,
+QPushButton#btnAddFirstEvent {
     border: none;
     border-radius: 8px;
     font-size: 13px;
     font-weight: 500;
+}
+
+QPushButton#btnAddEvent {
     padding: 6px 16px;
 }
 
@@ -173,10 +179,6 @@ QLabel#emptyText {
 }
 
 QPushButton#btnAddFirstEvent {
-    border: none;
-    border-radius: 8px;
-    font-size: 13px;
-    font-weight: 500;
     padding: 8px 20px;
 }
 
@@ -489,9 +491,81 @@ QFrame#logCardFrame {
 QPlainTextEdit#logTextArea {
     border: none;
     border-radius: 10px;
+    font-family: Consolas, 'Courier New', monospace;
     font-size: 12px;
     line-height: 1.5;
     padding: 12px 16px;
+}
+
+/* ============================================================
+ * 脚本列表页 (ScriptListPage)
+ * ============================================================ */
+
+/* 打开脚本目录按钮（紧凑型） */
+QPushButton#btnOpenScriptsDirSmall {
+    border: none;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 500;
+    padding: 6px 16px;
+}
+
+/* 新建脚本按钮 & 空状态新建按钮 */
+QPushButton#btnNewScript,
+QPushButton#btnAddFirstScript {
+    border: none;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 500;
+}
+
+QPushButton#btnNewScript {
+    padding: 6px 16px;
+}
+
+QPushButton#btnAddFirstScript {
+    padding: 8px 20px;
+}
+
+/* ============================================================
+ * 脚本卡片 (ScriptCard)
+ * ============================================================ */
+
+QFrame#ScriptCard {
+    border-radius: 10px;
+    border: 1px solid transparent;
+}
+
+/* 脚本名称标签 */
+QLabel#scriptNameLabel {
+    font-size: 13px;
+    font-weight: bold;
+}
+
+/* 文件信息标签 */
+QLabel#fileInfoLabel {
+    font-size: 11px;
+}
+
+/* ============================================================
+ * 脚本编辑页 (ScriptEditPage)
+ * ============================================================ */
+
+/* 工具栏 */
+QFrame#scriptToolbar {
+    border: none;
+}
+
+/* 脚本标题标签 */
+QLabel#scriptTitleLabel {
+    font-size: 14px;
+    font-weight: bold;
+}
+
+/* 编辑器外框 */
+QFrame#editorFrame {
+    border-radius: 10px;
+    border: 1px solid transparent;
 }
 
 /* ============================================================

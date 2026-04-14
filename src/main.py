@@ -11,7 +11,10 @@
 # nuitka-project: --windows-icon-from-ico=src/resources/icons/icon.ico
 
 # 排除未使用的 Qt 模块
+# nuitka-project: --nofollow-import-to=PySide6.QtDataVisualization
 # nuitka-project: --nofollow-import-to=PySide6.QtNetwork
+# nuitka-project: --nofollow-import-to=PySide6.QtOpenGL
+# nuitka-project: --nofollow-import-to=PySide6.QtOpenGLWidgets
 # nuitka-project: --nofollow-import-to=PySide6.QtPdf
 
 # 排除未使用的 win32ui（及其依赖 mfc140u.dll）
@@ -26,7 +29,9 @@
 # nuitka-project: --noinclude-dlls=libcrypto*
 # nuitka-project: --noinclude-dlls=libssl*
 # nuitka-project: --noinclude-dlls=mfc140u*
+# nuitka-project: --noinclude-dlls=qt6datavisualization*
 # nuitka-project: --noinclude-dlls=qt6network*
+# nuitka-project: --noinclude-dlls=qt6opengl*
 # nuitka-project: --noinclude-dlls=qt6pdf*
 
 # 包含 Windows 运行时 DLL，确保用户无需额外安装 VC++ 运行时

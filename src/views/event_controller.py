@@ -13,9 +13,10 @@ from PySide6.QtCore import QCoreApplication
 from PySide6.QtWidgets import QStackedWidget, QPushButton
 
 from core import common
-from core.input_backend import MOUSE_LEFT, MOUSE_RIGHT
 from core.config import events as configEvents
+from core.input_backend import MOUSE_LEFT, MOUSE_RIGHT
 from core.models import Event, ClickParams, PressParams, MultiParams, ScriptParams
+from views.constants import PageIndex
 from views.event_edit_page import EventEditPage
 from views.event_list_page import EventListPage
 
@@ -122,7 +123,7 @@ class EventController:
 
     def goToEventList(self):
         """切换到事件列表页"""
-        self._contentStack.setCurrentIndex(0)
+        self._contentStack.setCurrentIndex(PageIndex.EVENT_LIST)
         self._navBtnEvents.setChecked(True)
 
     def goToNewEvent(self):
@@ -130,7 +131,7 @@ class EventController:
         self._editingIndex = -1
         self._eventEditPage.resetForm(isEditing=False)
         self._eventEditPage.setScriptList(self._scanScripts())
-        self._contentStack.setCurrentIndex(1)
+        self._contentStack.setCurrentIndex(PageIndex.EVENT_EDIT)
 
     def goToEditEvent(self, index: int):
         """切换到编辑事件页，加载真实事件数据"""
@@ -159,7 +160,7 @@ class EventController:
             formData["script"] = event.target or ""
 
         self._eventEditPage.setFormData(formData)
-        self._contentStack.setCurrentIndex(1)
+        self._contentStack.setCurrentIndex(PageIndex.EVENT_EDIT)
 
     # ---- 事件保存 ----
 

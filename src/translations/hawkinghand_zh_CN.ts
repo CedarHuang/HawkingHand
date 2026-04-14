@@ -229,6 +229,10 @@ This action cannot be undone.</source>
         <translation>事件</translation>
     </message>
     <message>
+        <source>Scripts</source>
+        <translation>脚本</translation>
+    </message>
+    <message>
         <source>Settings</source>
         <translation>设置</translation>
     </message>
@@ -239,6 +243,120 @@ This action cannot be undone.</source>
     <message>
         <source>Toggle navigation bar</source>
         <translation>展开/折叠导航栏</translation>
+    </message>
+</context>
+<context>
+    <name>ScriptCard</name>
+    <message>
+        <source>✏️  Edit</source>
+        <translation>✏️  编辑</translation>
+    </message>
+    <message>
+        <source>📋  Copy</source>
+        <translation>📋  复制</translation>
+    </message>
+    <message>
+        <source>🗑️  Delete</source>
+        <translation>🗑️  删除</translation>
+    </message>
+    <message>
+        <source>More actions</source>
+        <translation>更多操作</translation>
+    </message>
+</context>
+<context>
+    <name>ScriptController</name>
+    <message>
+        <source>New Script</source>
+        <translation>新建脚本</translation>
+    </message>
+    <message>
+        <source>Script name (letters, digits, underscores):</source>
+        <translation>脚本名称（字母、数字、下划线）：</translation>
+    </message>
+    <message>
+        <source>Invalid Name</source>
+        <translation>名称无效</translation>
+    </message>
+    <message>
+        <source>Script name can only contain letters, digits, and underscores, and cannot start with a digit.</source>
+        <translation>脚本名称只能包含字母、数字和下划线，且不能以数字开头。</translation>
+    </message>
+    <message>
+        <source>Name Conflict</source>
+        <translation>名称冲突</translation>
+    </message>
+    <message>
+        <source>A script named &apos;{name}&apos; already exists.</source>
+        <translation>名为 &apos;{name}&apos; 的脚本已存在。</translation>
+    </message>
+    <message>
+        <source>Error</source>
+        <translation>错误</translation>
+    </message>
+    <message>
+        <source>Failed to create script file.</source>
+        <translation>创建脚本文件失败。</translation>
+    </message>
+    <message>
+        <source>Failed to copy script file.</source>
+        <translation>复制脚本文件失败。</translation>
+    </message>
+    <message>
+        <source>Delete Script</source>
+        <translation>删除脚本</translation>
+    </message>
+    <message>
+        <source>Are you sure you want to delete &apos;{name}&apos;?
+This action cannot be undone.</source>
+        <translation>确定要删除 &apos;{name}&apos; 吗？
+此操作无法撤销。</translation>
+    </message>
+    <message>
+        <source>Failed to delete script file.</source>
+        <translation>删除脚本文件失败。</translation>
+    </message>
+    <message>
+        <source>Unsaved Changes</source>
+        <translation>未保存的更改</translation>
+    </message>
+    <message>
+        <source>You have unsaved changes. Do you want to save before leaving?</source>
+        <translation>你有未保存的更改。离开前是否保存？</translation>
+    </message>
+</context>
+<context>
+    <name>ScriptEditPage</name>
+    <message>
+        <source>Back to script list</source>
+        <translation>返回脚本列表</translation>
+    </message>
+    <message>
+        <source>Save (Ctrl+S)</source>
+        <translation>保存 (Ctrl+S)</translation>
+    </message>
+</context>
+<context>
+    <name>ScriptListPage</name>
+    <message>
+        <source>Script List</source>
+        <translation>脚本列表</translation>
+    </message>
+    <message>
+        <source>📂 Open</source>
+        <translation>📂 打开</translation>
+    </message>
+    <message>
+        <source>+ New</source>
+        <translation>+ 新建</translation>
+    </message>
+    <message>
+        <source>No scripts yet</source>
+        <translation>暂无脚本</translation>
+    </message>
+    <message>
+        <source>+ Create your first script</source>
+        <translation>+ 创建你的第一个脚本</translation>
     </message>
 </context>
 <context>
