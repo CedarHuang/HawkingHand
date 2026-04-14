@@ -10,7 +10,7 @@ Python 代码编辑器组件
 import json
 
 from PySide6.QtCore import Qt, QRegularExpression, QFile, QIODevice
-from PySide6.QtGui import QFontMetricsF, QPainter
+from PySide6.QtGui import QFontMetricsF, QPainter, QTextCursor
 from PySide6.QtWidgets import QTextEdit
 
 from pyqcodeeditor import utils as qce_utils
@@ -98,7 +98,7 @@ class PythonCodeEditor(QCodeEditor):
         isEmpty = len(text) <= 0
         if not self._completer or (ctrlOrShift and isEmpty) or key == Qt.Key_Delete:
             return
-        eow = r""""(~!@#$%^&*()_+{}|:"<>?,./;'[]\-=)"""
+        eow = r""""(~!@#$%^&*()+{}|:"<>?,./;'[]\-=)"""
         isShortcut = qce_utils.is_shortcut(e, Qt.ControlModifier, Qt.Key_Space)
         completionPrefix = self._wordUnderCursor()
         isContainChar = len(text) > 0 and (text[-1] in eow)
@@ -119,6 +119,36 @@ class PythonCodeEditor(QCodeEditor):
             + self._completer.popup().verticalScrollBar().sizeHint().width()
         )
         self._completer.complete(cursRect)
+
+    def _wordUnderCursor(self) -> str:
+        """重写补全前缀提取：从光标位置向左扫描 Python 标识符字符
+
+        父类使用 QTextCursor.WordUnderCursor，当光标紧贴 ')' 等符号时
+        会选中该符号而非前面的标识符，导致括号内无法触发补全。
+        """
+        tc = self.textCursor()
+        blockText = tc.block().text()
+        pos = min(tc.positionInBlock(), len(blockText))
+        # 从光标位置向左扫描，收集连续的标识符字符（字母、数字、下划线）
+        start = pos
+        while start > 0 and (blockText[start - 1].isalnum() or blockText[start - 1] == '_'):
+            start -= 1
+        return blockText[start:pos]
+
+    def _insertCompletion(self, s: str):
+        """重写补全插入：选中光标前的标识符前缀后替换
+
+        父类使用 QTextCursor.WordUnderCursor 选中待替换文本，
+        与 _wordUnderCursor 存在相同的括号内误选问题。
+        """
+        if self._completer.widget() != self:
+            return
+        tc = self.textCursor()
+        prefixLen = len(self._completer.completionPrefix())
+        # 向左选中与补全前缀等长的文本，然后替换为完整补全词
+        tc.movePosition(QTextCursor.Left, QTextCursor.KeepAnchor, prefixLen)
+        tc.insertText(s)
+        self.setTextCursor(tc)
 
     # ---- 编辑器初始化 ----
 
