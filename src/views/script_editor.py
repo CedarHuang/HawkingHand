@@ -87,6 +87,25 @@ class PythonCodeEditor(QCodeEditor):
                     indentStr = "\t" * (tabCounts + 1)
                 self.insertPlainText("\n" + indentStr)
                 return
+        # Backspace 智能退格：光标前全是空格且数量为 tabReplaceSize 的倍数时，一次删除一个缩进单位
+        if key == Qt.Key_Backspace and e.modifiers() == Qt.NoModifier and self._replaceTab:
+            cursor = self.textCursor()
+            if not cursor.hasSelection():
+                col = cursor.positionInBlock()
+                lineText = cursor.block().text()
+                textBeforeCursor = lineText[:col]
+                tabSize = self.tabReplaceSize()
+                # 光标前全是空格，且空格数是 tabSize 的倍数
+                if (
+                    col >= tabSize
+                    and textBeforeCursor.strip() == ""
+                    and col % tabSize == 0
+                ):
+                    # 删除前面 tabSize 个空格
+                    for _ in range(tabSize):
+                        cursor.deletePreviousChar()
+                    return
+
         # 其他情况交给父类处理
         super().keyPressEvent(e, **kwargs)
 
