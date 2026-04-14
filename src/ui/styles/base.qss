@@ -568,6 +568,12 @@ QFrame#editorFrame {
     border: 1px solid transparent;
 }
 
+/* 代码编辑器（覆盖全局字体，使用等宽字体） */
+QTextEdit#codeEditor {
+    font-family: Consolas, 'Courier New', monospace;
+    font-size: 13pt;
+}
+
 /* ============================================================
  * 滚动条全局样式
  * ============================================================ */

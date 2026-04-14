@@ -41,6 +41,7 @@ class ScriptEditPage(QWidget):
 
         # ---- 创建代码编辑器 ----
         self._editor = PythonCodeEditor()
+        self._editor.setObjectName("codeEditor")
 
         # 将编辑器添加到 editorFrame
         self.ui.editorLayout.addWidget(self._editor)

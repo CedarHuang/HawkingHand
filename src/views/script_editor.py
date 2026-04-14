@@ -10,7 +10,7 @@ Python 代码编辑器组件
 import json
 
 from PySide6.QtCore import Qt, QRegularExpression, QFile, QIODevice
-from PySide6.QtGui import QFont, QFontMetricsF, QPainter
+from PySide6.QtGui import QFontMetricsF, QPainter
 from PySide6.QtWidgets import QTextEdit
 
 from pyqcodeeditor import utils as qce_utils
@@ -52,9 +52,6 @@ class PythonCodeEditor(QCodeEditor):
         self._replaceTab = True
         self._tabReplace = " " * self._TAB_SPACES
         self._defaultIndent = self.tabReplaceSize()
-
-        # 设置字体
-        self._setupFontAndIndent()
 
         # 创建修复版行号区域
         self._lineNumberArea = FixedLineNumberArea(self)
@@ -125,21 +122,13 @@ class PythonCodeEditor(QCodeEditor):
 
     # ---- 编辑器初始化 ----
 
-    def _setupFontAndIndent(self):
-        """设置等宽字体和 Tab/缩进宽度"""
-        # 等宽字体（带回退链：Consolas → Courier New → 等宽字体）
-        editorFont = QFont(["Consolas", "Courier New", "monospace"])
-        editorFont.setPointSize(13)
-        editorFont.setFixedPitch(True)
-        self.setFont(editorFont)
-        # 通过 stylesheet 防止全局 QSS 的 * { font-family } 覆盖
-        self.setStyleSheet(
-            "QTextEdit { font-family: Consolas, 'Courier New', monospace; font-size: 13pt; }"
-        )
-
-        # Tab 视觉宽度
-        fm = QFontMetricsF(editorFont)
-        self.setTabStopDistance(fm.horizontalAdvance(' ') * self._TAB_SPACES)
+    def showEvent(self, event):
+        """首次显示时根据 QSS 生效后的字体设置 Tab 视觉宽度"""
+        super().showEvent(event)
+        if not hasattr(self, '_tabStopInitialized'):
+            self._tabStopInitialized = True
+            fm = QFontMetricsF(self.font())
+            self.setTabStopDistance(fm.horizontalAdvance(' ') * self._TAB_SPACES)
 
     # ---- 语言文件路径（高亮 + 补全共享） ----
 
