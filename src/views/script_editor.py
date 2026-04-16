@@ -9,7 +9,7 @@ Python 代码编辑器组件
 
 import json
 
-from PySide6.QtCore import Qt, QPointF, QRectF, QRegularExpression, QFile, QIODevice, Property
+from PySide6.QtCore import Qt, QPointF, QRectF, QRegularExpression, QFile, QIODevice, QTimer, Property
 from PySide6.QtGui import QBrush, QColor, QFontMetricsF, QPainter, QPainterPath, QPalette, QPen, QTextCursor, QTextFormat
 from PySide6.QtWidgets import QListView, QStyle, QStyledItemDelegate, QStyleOptionViewItem, QTextEdit
 
@@ -141,10 +141,6 @@ class PythonCodeEditor(QCodeEditor):
             )
         )
         self._completer.complete(cursRect)
-        # complete() 后手动修正弹窗高度，消除底部多余间隙
-        popup = self._completer.popup()
-        if isinstance(popup, _WrapAroundListView):
-            popup._adjustHeightToContent()
 
     def _wordUnderCursor(self) -> str:
         """重写补全前缀提取：从光标位置向左扫描 Python 标识符字符
@@ -430,6 +426,7 @@ class PythonCodeEditor(QCodeEditor):
         # 使用支持循环导航 + 圆角绘制的自定义 popup 替换默认 popup
         popup = _WrapAroundListView()
         popup.setObjectName("completerPopup")
+        popup.maxVisibleItems = completer.maxVisibleItems()
         completer.setPopup(popup)
 
         # 使用紧凑行高的 delegate 控制 item 高度
@@ -675,6 +672,7 @@ class _WrapAroundListView(QListView):
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.maxVisibleItems = 10  # 最大可见行数，由 setupCompleterPopupStyle 设置
 
         # 颜色属性默认值（可通过 QSS qproperty 覆盖）
         self._bgColor = QColor("#282C34")
@@ -695,17 +693,26 @@ class _WrapAroundListView(QListView):
     selFg = _completer_color_property('_selFg')
     scrollColor = _completer_color_property('_scrollColor')
 
+    def resizeEvent(self, event):
+        """拦截外部对弹窗的 resize，延迟修正为精确高度
+
+        QCompleter.complete() 每次都会设置弹窗大小，但其计算在
+        FramelessWindowHint 下不够精确。延迟到当前事件处理完毕后
+        修正，_adjustHeightToContent 自身的幂等守卫保证不会无限循环。
+        """
+        super().resizeEvent(event)
+        QTimer.singleShot(0, self._adjustHeightToContent)
+
     def _adjustHeightToContent(self):
-        """根据实际 item 总高度调整弹窗窗口大小"""
+        """根据实际 item 总高度精确调整弹窗窗口大小（不超过 maxVisibleItems）"""
         model = self.model()
         if not model:
             return
         rowCount = model.rowCount()
         if rowCount <= 0:
             return
-        # 计算所有可见 item 的总高度
-        totalHeight = sum(self.sizeHintForRow(i) for i in range(rowCount))
-        # 加上 viewport 与窗口之间的边距差（frame、margins 等）
+        visibleCount = min(rowCount, self.maxVisibleItems)
+        totalHeight = sum(self.sizeHintForRow(i) for i in range(visibleCount))
         window = self.window()
         extraHeight = window.height() - self.viewport().height()
         newHeight = totalHeight + extraHeight
