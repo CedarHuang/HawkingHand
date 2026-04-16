@@ -330,8 +330,8 @@ This action cannot be undone.</source>
         <translation></translation>
     </message>
     <message>
-        <source>Save (Ctrl+S)</source>
-        <translation></translation>
+        <source>💾 Save</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>

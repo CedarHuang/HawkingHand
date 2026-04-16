@@ -332,8 +332,8 @@ This action cannot be undone.</source>
         <translation>返回脚本列表</translation>
     </message>
     <message>
-        <source>Save (Ctrl+S)</source>
-        <translation>保存 (Ctrl+S)</translation>
+        <source>💾 Save</source>
+        <translation>💾 保存</translation>
     </message>
 </context>
 <context>

@@ -98,27 +98,21 @@
        <widget class="QPushButton" name="btnSave">
         <property name="minimumSize">
          <size>
-          <width>32</width>
+          <width>0</width>
           <height>32</height>
          </size>
         </property>
         <property name="maximumSize">
          <size>
-          <width>32</width>
+          <width>16777215</width>
           <height>32</height>
          </size>
         </property>
         <property name="text">
-         <string notr="true">💾</string>
-        </property>
-        <property name="flat">
-         <bool>true</bool>
+         <string>💾 Save</string>
         </property>
         <property name="enabled">
          <bool>false</bool>
-        </property>
-        <property name="toolTip">
-         <string>Save (Ctrl+S)</string>
         </property>
        </widget>
       </item>

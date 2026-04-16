@@ -466,8 +466,8 @@ QPushButton#btnSave:pressed {
     background-color: #3068D8;
 }
 QPushButton#btnSave:disabled {
-    background-color: #B0C4F2;
-    color: #E0E7FA;
+    background-color: #D3D5DA;
+    color: #A0A3A8;
 }
 
 /* ============================================================
