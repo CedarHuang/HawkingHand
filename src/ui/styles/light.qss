@@ -599,7 +599,6 @@ QLabel#scriptTitleLabel {
 /* 编辑器外框 */
 QFrame#editorFrame {
     background-color: #FFFFFF;
-    border: 1px solid #E5E5E8;
 }
 
 /* 补全弹窗颜色（手绘圆角，颜色通过 qproperty 传递给 paintEvent） */

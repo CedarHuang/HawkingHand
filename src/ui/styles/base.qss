@@ -564,12 +564,12 @@ QLabel#scriptTitleLabel {
 
 /* 编辑器外框 */
 QFrame#editorFrame {
-    border-radius: 10px;
-    border: 1px solid transparent;
+    border: none;
 }
 
 /* 代码编辑器（覆盖全局字体，使用等宽字体） */
 QTextEdit#codeEditor {
+    border: none;
     font-family: Consolas, 'Courier New', monospace;
     font-size: 13pt;
 }
