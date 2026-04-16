@@ -4,20 +4,24 @@
 提供脚本编辑页面，支持加载/保存脚本、主题切换、代码补全等功能。
 """
 
+import ast
+import builtins
+import inspect
 import json
+import keyword
 import os
 
-from PySide6.QtCore import Signal, Qt, QStringListModel, QFileSystemWatcher, QFile, QIODevice
+from PySide6.QtCore import Signal, Qt, QFileSystemWatcher, QFile, QIODevice, QTimer
 from PySide6.QtGui import QShortcut, QKeySequence, QTextCursor
 from PySide6.QtWidgets import QWidget, QCompleter
 
 from pyqcodeeditor.QSyntaxStyle import QSyntaxStyle
 
-from core import logger, api
+from core import logger, common
 from core.config import settings as configSettings
 from ui.generated.ui_script_edit_page import Ui_ScriptEditPage
 from views.appearance import resolveTheme
-from views.script_editor import PythonCodeEditor
+from views.script_editor import PythonCodeEditor, CompletionKind, CompletionModel, COMPLETION_TEXT_ROLE
 
 
 # ============================================================
@@ -38,6 +42,7 @@ class ScriptEditPage(QWidget):
         self._filePath = ""
         self._isModified = False
         self._savingInProgress = False  # 保存时临时禁用文件监听
+        self._lastContextSymbols = []  # AST 提取的上下文符号缓存
 
         # ---- 创建代码编辑器 ----
         self._editor = PythonCodeEditor()
@@ -48,6 +53,12 @@ class ScriptEditPage(QWidget):
 
         # ---- 创建补全器 ----
         self._setupCompleter()
+
+        # ---- 上下文补全防抖定时器 ----
+        self._contextUpdateTimer = QTimer(self)
+        self._contextUpdateTimer.setSingleShot(True)
+        self._contextUpdateTimer.setInterval(500)  # 停止输入 500ms 后更新
+        self._contextUpdateTimer.timeout.connect(self._updateContextCompletions)
 
         # ---- 加载语法主题 ----
         self._syntaxStyleLight = QSyntaxStyle()
@@ -109,6 +120,9 @@ class ScriptEditPage(QWidget):
         cursor.movePosition(QTextCursor.Start)
         self._editor.setTextCursor(cursor)
 
+        # 立即提取上下文符号（新文件加载后无需等待防抖）
+        self._updateContextCompletions()
+
     def saveScript(self):
         """保存编辑器内容到脚本文件"""
         if not self._filePath or not self._isModified:
@@ -152,9 +166,10 @@ class ScriptEditPage(QWidget):
     # ---- 内部方法 ----
 
     def _onTextChanged(self):
-        """编辑器内容变化时标记为已修改"""
+        """编辑器内容变化时标记为已修改，并触发上下文补全更新"""
         if not self._isModified:
             self._setModified(True)
+        self._contextUpdateTimer.start()
 
     def _setModified(self, modified: bool):
         """设置修改状态"""
@@ -210,45 +225,176 @@ class ScriptEditPage(QWidget):
         isDark = currentTheme == "dark"
         self.updateTheme(isDark)
 
+    # Python 关键字中属于常量的子集，映射为 VARIABLE 而非 KEYWORD
+    _KEYWORD_CONSTANTS = frozenset({"True", "False", "None"})
+
     def _setupCompleter(self):
         """创建并配置代码补全器
 
-        补全词汇来源：
-        1. python_lang.json 中的所有词汇（与语法高亮共享同一数据源）
-        2. 脚本 API 暴露的函数名
-        3. 允许导入的内置模块名
+        补全词汇来源（按优先级从高到低）：
+        1. __builtins__.py 中通过 AST 解析提取的 API 符号（高优先级）
+        2. 用户上下文符号（高优先级，动态更新）
+        3. Python builtins + keyword 模块自省的词汇（低优先级）
+        4. 允许导入的内置模块名（低优先级）
         """
-        completionWords = []
+        baseItems: list[tuple[str, CompletionKind]] = []
 
-        # 从语言定义文件加载 Python 关键字、内置函数、类型、异常等
-        completionWords.extend(self._editor.loadLanguageWords())
+        # 从 Python builtins + keyword 模块自省获取内置词汇
+        baseItems.extend(self._buildPythonBuiltinItems())
 
-        # 从 API 获取函数名列表
+        # 从 __builtins__.py 中通过 AST 解析提取 API 符号（高优先级）
+        builtinsPath = common.builtins_path()
         try:
-            ctx = api._create_context(None)
-            for name in ctx:
-                if not name.startswith("_"):
-                    completionWords.append(name)
+            with open(builtinsPath, "r", encoding="utf-8") as f:
+                baseItems.extend(self._extractSymbolsWithKind(f.read()))
         except Exception as e:
-            logger.app.warning(f"Failed to get API context for completion: {e}")
+            logger.app.warning(f"Failed to parse builtins for completion: {e}")
 
         # 添加允许导入的内置模块名
-        completionWords.extend(["math", "time"])
+        baseItems.extend([
+            ("math", CompletionKind.MODULE),
+            ("time", CompletionKind.MODULE),
+        ])
 
-        # 去重并按大小写不敏感的字典序排序
-        completionWords = sorted(set(completionWords), key=str.lower)
+        self._baseCompletionItems = baseItems
 
         # 创建补全器
-        model = QStringListModel(completionWords)
+        model = CompletionModel()
+        model.setItems(baseItems)
         completer = QCompleter()
         completer.setModel(model)
+        completer.setCompletionRole(COMPLETION_TEXT_ROLE)
         completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
+        completer.setModelSorting(QCompleter.ModelSorting.UnsortedModel)
         completer.setMaxVisibleItems(8)
 
         self._editor.setCompleter(completer)
 
         # 配置补全弹窗样式
         self._editor.setupCompleterPopupStyle()
+
+    @classmethod
+    def _buildPythonBuiltinItems(cls) -> list[tuple[str, CompletionKind]]:
+        """通过 Python 运行时自省构建内置补全词汇
+
+        数据来源：
+        - keyword 模块：所有 Python 关键字（if/for/def/class/...）
+        - builtins 模块：所有内置名称，通过 inspect 精确判断类型
+
+        Returns:
+            (符号名, CompletionKind) 元组列表
+        """
+        items: list[tuple[str, CompletionKind]] = []
+
+        # 1. Python 关键字
+        for kw in keyword.kwlist:
+            if kw in cls._KEYWORD_CONSTANTS:
+                items.append((kw, CompletionKind.VARIABLE))
+            else:
+                items.append((kw, CompletionKind.KEYWORD))
+        # soft keywords（match/case/type 等，Python 3.10+）
+        for skw in getattr(keyword, 'softkwlist', []):
+            items.append((skw, CompletionKind.KEYWORD))
+
+        # 2. builtins 模块中的所有公开名称
+        for name in dir(builtins):
+            if name.startswith('_'):
+                continue
+            obj = getattr(builtins, name, None)
+            if obj is None:
+                continue
+            # 精确判断类型
+            if inspect.isfunction(obj) or inspect.isbuiltin(obj):
+                items.append((name, CompletionKind.FUNCTION))
+            elif inspect.isclass(obj):
+                if issubclass(obj, BaseException):
+                    items.append((name, CompletionKind.EXCEPTION))
+                else:
+                    items.append((name, CompletionKind.CLASS))
+            else:
+                # NotImplemented, Ellipsis, __debug__ 等特殊常量
+                items.append((name, CompletionKind.VARIABLE))
+
+        return items
+
+    @staticmethod
+    def _extractSymbolsWithKind(source: str) -> list[tuple[str, CompletionKind]]:
+        """通过 AST 解析提取源码中的顶层公开符号名及其类型
+
+        提取函数名、类名、变量名、函数参数名、导入名等，
+        过滤掉以下划线开头的私有符号。
+
+        Args:
+            source: Python 源码文本
+
+        Returns:
+            (符号名, CompletionKind) 元组列表；解析失败时返回空列表
+        """
+        try:
+            tree = ast.parse(source)
+        except SyntaxError:
+            return []
+
+        symbols: dict[str, CompletionKind] = {}  # name -> kind（保留最高优先级）
+
+        def _add(name: str, kind: CompletionKind):
+            if name and not name.startswith('_'):
+                if name not in symbols or kind < symbols[name]:
+                    symbols[name] = kind
+
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                _add(node.name, CompletionKind.FUNCTION)
+                for arg in node.args.args + node.args.posonlyargs + node.args.kwonlyargs:
+                    _add(arg.arg, CompletionKind.VARIABLE)
+                if node.args.vararg:
+                    _add(node.args.vararg.arg, CompletionKind.VARIABLE)
+                if node.args.kwarg:
+                    _add(node.args.kwarg.arg, CompletionKind.VARIABLE)
+            elif isinstance(node, ast.ClassDef):
+                _add(node.name, CompletionKind.CLASS)
+            elif isinstance(node, ast.Name) and isinstance(node.ctx, ast.Store):
+                _add(node.id, CompletionKind.VARIABLE)
+            elif isinstance(node, ast.Import):
+                for alias in node.names:
+                    _add(alias.asname or alias.name, CompletionKind.MODULE)
+            elif isinstance(node, ast.ImportFrom):
+                for alias in node.names:
+                    _add(alias.asname or alias.name, CompletionKind.MODULE)
+            elif isinstance(node, ast.Global):
+                for name in node.names:
+                    _add(name, CompletionKind.VARIABLE)
+
+        return list(symbols.items())
+
+    def _updateContextCompletions(self):
+        """从当前文档中提取用户定义的标识符，合并到补全模型
+
+        使用 AST 解析精确提取函数名、类名、变量名、参数名、导入名等。
+        语法错误时沿用上一次成功解析的结果，保证编辑过程中补全不中断。
+        补全弹窗可见时跳过更新，避免模型刷新导致选中态丢失。
+        """
+        # 补全弹窗正在显示时，不更新模型，避免打断用户交互
+        completer = self._editor.completer()
+        if completer and completer.popup() and completer.popup().isVisible():
+            return
+
+        text = self._editor.toPlainText()
+        extracted = self._extractSymbolsWithKind(text)
+        if extracted or not self._lastContextSymbols:
+            # 解析成功（或从未成功过），更新缓存
+            baseTextSet = {item[0] for item in self._baseCompletionItems}
+            contextSymbols = [(t, k) for t, k in extracted if t not in baseTextSet]
+            self._lastContextSymbols = contextSymbols
+        else:
+            # 解析失败（语法错误），沿用上次成功的结果
+            contextSymbols = self._lastContextSymbols
+
+        # 合并基础词汇和上下文符号，更新模型
+        merged = self._baseCompletionItems + contextSymbols
+        completer = self._editor.completer()
+        if completer:
+            completer.model().setItems(merged)
 
     def _onFileChanged(self, path: str):
         """文件被外部修改时的处理"""

@@ -8,9 +8,10 @@ Python 代码编辑器组件
 """
 
 import json
+from enum import IntEnum
 
-from PySide6.QtCore import Qt, QPointF, QRectF, QRegularExpression, QFile, QIODevice, QTimer, Property
-from PySide6.QtGui import QBrush, QColor, QFontMetricsF, QPainter, QPainterPath, QPalette, QPen, QTextCursor, QTextFormat
+from PySide6.QtCore import Qt, QPointF, QRectF, QRegularExpression, QFile, QIODevice, QTimer, Property, QAbstractListModel, QModelIndex
+from PySide6.QtGui import QBrush, QColor, QFont, QFontMetricsF, QPainter, QPainterPath, QPalette, QPen, QTextCursor, QTextFormat
 from PySide6.QtWidgets import QListView, QStyle, QStyledItemDelegate, QStyleOptionViewItem, QTextEdit
 
 from pyqcodeeditor import utils as qce_utils
@@ -23,6 +24,93 @@ from pyqcodeeditor.QStyleSyntaxHighlighter import QStyleSyntaxHighlighter
 from pyqcodeeditor.QSyntaxStyle import QSyntaxStyle
 
 from core import logger
+
+
+# ============================================================
+# 补全数据模型
+# ============================================================
+
+class CompletionKind(IntEnum):
+    """补全候选项的类型，数值即为排序优先级（越小越靠前）"""
+    FUNCTION = 0    # 函数（API 函数、用户定义函数）
+    VARIABLE = 1    # 变量 / 常量
+    CLASS = 2       # 类
+    MODULE = 3      # 模块
+    KEYWORD = 4     # Python 关键字
+    EXCEPTION = 5   # 异常类
+
+    @property
+    def icon(self) -> str:
+        """类型对应的图标字符"""
+        return _KIND_ICONS[self]
+
+    @property
+    def color(self) -> QColor:
+        """类型对应的图标颜色"""
+        return QColor(_KIND_COLORS[self])
+
+
+# 图标字符映射
+_KIND_ICONS = {
+    CompletionKind.FUNCTION:  "ƒ",
+    CompletionKind.VARIABLE:  "𝑥",
+    CompletionKind.CLASS:     "C",
+    CompletionKind.MODULE:    "M",
+    CompletionKind.KEYWORD:   "⌘",
+    CompletionKind.EXCEPTION: "E",
+}
+
+# 图标颜色映射
+_KIND_COLORS = {
+    CompletionKind.FUNCTION:  "#C678DD",  # 紫色
+    CompletionKind.VARIABLE:  "#61AFEF",  # 蓝色
+    CompletionKind.CLASS:     "#E5C07B",  # 橙黄色
+    CompletionKind.MODULE:    "#98C379",  # 绿色
+    CompletionKind.KEYWORD:   "#ABB2BF",  # 灰色
+    CompletionKind.EXCEPTION: "#E06C75",  # 红色
+}
+
+# QCompleter 用于获取补全文本的自定义 role
+COMPLETION_TEXT_ROLE = Qt.UserRole + 1
+COMPLETION_KIND_ROLE = Qt.UserRole + 2
+
+
+class CompletionModel(QAbstractListModel):
+    """补全候选项模型，存储带类型信息的补全词汇
+
+    排序规则：先按 CompletionKind 优先级（数值越小越靠前），
+    同优先级内按大小写不敏感的字典序排列。
+    QCompleter 通过 completionRole=COMPLETION_TEXT_ROLE 进行前缀匹配。
+    """
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._items: list[tuple[str, CompletionKind]] = []  # (text, kind)
+
+    def setItems(self, items: list[tuple[str, CompletionKind]]):
+        """设置补全词汇列表（自动排序去重）"""
+        self.beginResetModel()
+        # 去重：相同 text 保留优先级最高（数值最小）的 kind
+        seen = {}  # text -> kind
+        for text, kind in items:
+            if text not in seen or kind < seen[text]:
+                seen[text] = kind
+        # 排序：先按 kind 优先级，同 kind 按字典序
+        self._items = sorted(seen.items(), key=lambda x: (x[1], x[0].lower()))
+        self.endResetModel()
+
+    def rowCount(self, parent=QModelIndex()):
+        return len(self._items)
+
+    def data(self, index, role=Qt.DisplayRole):
+        if not index.isValid() or index.row() >= len(self._items):
+            return None
+        text, kind = self._items[index.row()]
+        if role == Qt.DisplayRole or role == COMPLETION_TEXT_ROLE:
+            return text
+        if role == COMPLETION_KIND_ROLE:
+            return kind
+        return None
 
 
 # ============================================================
@@ -161,6 +249,7 @@ class PythonCodeEditor(QCodeEditor):
 
         父类使用 QTextCursor.WordUnderCursor 选中待替换文本，
         与 _wordUnderCursor 存在相同的括号内误选问题。
+        当使用 CompletionModel 时，s 已经是纯文本（通过 completionRole 获取）。
         """
         if self._completer.widget() != self:
             return
@@ -219,22 +308,6 @@ class PythonCodeEditor(QCodeEditor):
         )
         self._loadExtendedPythonRules()
         self.setHighlighter(self._highlighter)
-
-    def loadLanguageWords(self):
-        """从语言定义文件加载所有词汇，供补全器复用
-
-        Returns:
-            包含所有 Python 关键字、内置函数、类型、异常等词汇的列表
-        """
-        lang = self._getLanguage()
-        if not lang:
-            return []
-        words = []
-        for key in lang.keys():
-            names = lang.names(key)
-            if names:
-                words.extend(names)
-        return words
 
     def _getLanguage(self):
         """获取语言定义实例（带缓存，从 Qt 资源系统加载）"""
@@ -592,23 +665,29 @@ class FixedLineNumberArea(_QLineNumberArea):
 # ============================================================
 
 class _CompactItemDelegate(QStyledItemDelegate):
-    """紧凑行高的 item delegate，手动绘制带圆角裁剪的 item 背景
+    """紧凑行高的 item delegate，手动绘制带圆角裁剪的 item 背景和类型图标
 
     QSS 中 item 背景设为 transparent，由此 delegate 在 paint() 中
     手动绘制选中/悬停背景，并设置与弹窗边框一致的圆角 clip path，
     确保 item 背景不会超出圆角边框范围。
+    每个 item 左侧绘制一个彩色类型图标字符（类似 VSCode 风格）。
     """
 
-    _VERTICAL_PADDING = 2  # 文字上下各留 2px
+    _VERTICAL_PADDING = 2   # 文字上下各留 2px
+    _ICON_LEFT_MARGIN = 6   # 图标左侧边距
+    _ICON_RIGHT_MARGIN = 6  # 图标与文字之间的间距
+    _ICON_WIDTH = 14         # 图标字符占用的宽度
 
     def sizeHint(self, option, index):
         size = super().sizeHint(option, index)
         fm = option.fontMetrics
         size.setHeight(fm.height() + self._VERTICAL_PADDING * 2)
+        # 宽度需包含图标区域
+        size.setWidth(size.width() + self._ICON_LEFT_MARGIN + self._ICON_WIDTH + self._ICON_RIGHT_MARGIN)
         return size
 
     def paint(self, painter, option, index):
-        """先绘制带圆角裁剪的 item 背景，再以正确的文字颜色绘制文本"""
+        """先绘制带圆角裁剪的 item 背景，再绘制类型图标和文本"""
         listView = option.widget
         isSelected = bool(option.state & QStyle.State_Selected)
         isHovered = bool(option.state & QStyle.State_MouseOver)
@@ -632,16 +711,45 @@ class _CompactItemDelegate(QStyledItemDelegate):
             painter.fillRect(QRectF(option.rect), bgColor)
             painter.restore()
 
-        # 根据选中/未选中状态设置不同的文字颜色
+        # 确定文字颜色
+        fgColor = None
         if listView:
             fgColor = listView.selFg if isSelected else listView.fg
-            if fgColor and fgColor.isValid():
-                option = QStyleOptionViewItem(option)  # 拷贝以避免修改原始 option
-                option.palette.setColor(QPalette.ColorRole.Text, fgColor)
-                option.palette.setColor(QPalette.ColorRole.HighlightedText, fgColor)
 
-        # 父类绘制文字等内容（背景已由上面手动绘制，QSS 中 item 背景为 transparent）
-        super().paint(painter, option, index)
+        rect = option.rect
+        kind = index.data(COMPLETION_KIND_ROLE)
+        text = index.data(Qt.DisplayRole) or ""
+
+        painter.save()
+
+        # ---- 绘制类型图标 ----
+        if kind is not None:
+            iconChar = kind.icon
+            iconColor = kind.color
+            iconRect = QRectF(
+                rect.left() + self._ICON_LEFT_MARGIN,
+                rect.top(),
+                self._ICON_WIDTH,
+                rect.height(),
+            )
+            iconFont = QFont(option.font)
+            iconFont.setPointSizeF(option.font.pointSizeF() * 0.85)
+            iconFont.setBold(True)
+            painter.setFont(iconFont)
+            painter.setPen(iconColor)
+            painter.drawText(iconRect, Qt.AlignCenter, iconChar)
+
+        # ---- 绘制补全文本 ----
+        textLeft = rect.left() + self._ICON_LEFT_MARGIN + self._ICON_WIDTH + self._ICON_RIGHT_MARGIN
+        textRect = QRectF(textLeft, rect.top(), rect.right() - textLeft, rect.height())
+        painter.setFont(option.font)
+        if fgColor and fgColor.isValid():
+            painter.setPen(fgColor)
+        else:
+            painter.setPen(option.palette.color(QPalette.ColorRole.Text))
+        painter.drawText(textRect, Qt.AlignVCenter | Qt.AlignLeft, text)
+
+        painter.restore()
 
 
 def _completer_color_property(attr: str) -> Property:
