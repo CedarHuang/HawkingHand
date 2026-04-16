@@ -602,6 +602,22 @@ QFrame#editorFrame {
     border: 1px solid #E5E5E8;
 }
 
+/* 补全弹窗颜色（手绘圆角，颜色通过 qproperty 传递给 paintEvent） */
+QListView#completerPopup {
+    color: #696C77;
+    qproperty-bgColor: #FAFAFA;
+    qproperty-borderColor: #C8C9CC;
+    qproperty-selBg: #E4E4E6;
+    qproperty-hoverBg: #F0F0F2;
+    qproperty-fg: #696C77;
+    qproperty-selFg: #383A42;
+    qproperty-scrollColor: #B8B9BC;
+}
+
+QListView#completerPopup QScrollBar::handle:vertical {
+    background-color: #B8B9BC;
+}
+
 /* ============================================================
  * 日志页
  * ============================================================ */

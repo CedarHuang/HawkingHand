@@ -574,6 +574,50 @@ QTextEdit#codeEditor {
     font-size: 13pt;
 }
 
+/* ---- 补全弹窗 ---- */
+QListView#completerPopup {
+    background: transparent;
+    font-family: Consolas, 'Courier New', monospace;
+    font-size: 12pt;
+    border: none;
+    padding: 0px;
+    outline: none;
+}
+
+QListView#completerPopup::item {
+    padding: 0px 6px;
+    background: transparent;
+}
+
+QListView#completerPopup::item:hover {
+    background: transparent;
+}
+
+QListView#completerPopup::item:selected {
+    background: transparent;
+}
+
+QListView#completerPopup QScrollBar:vertical {
+    background: transparent;
+    width: 6px;
+    margin: 4px 0px;
+    border: none;
+    border-radius: 3px;
+}
+
+QListView#completerPopup QScrollBar::handle:vertical {
+    border-radius: 3px;
+    min-height: 20px;
+}
+
+QListView#completerPopup QScrollBar::add-line:vertical,
+QListView#completerPopup QScrollBar::sub-line:vertical,
+QListView#completerPopup QScrollBar::add-page:vertical,
+QListView#completerPopup QScrollBar::sub-page:vertical {
+    height: 0px;
+    background: transparent;
+}
+
 /* ============================================================
  * 滚动条全局样式
  * ============================================================ */

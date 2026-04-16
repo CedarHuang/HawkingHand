@@ -9,9 +9,9 @@ Python 代码编辑器组件
 
 import json
 
-from PySide6.QtCore import Qt, QPointF, QRectF, QRegularExpression, QFile, QIODevice
-from PySide6.QtGui import QFontMetricsF, QPainter, QTextCursor
-from PySide6.QtWidgets import QListView, QTextEdit
+from PySide6.QtCore import Qt, QPointF, QRectF, QRegularExpression, QFile, QIODevice, Property
+from PySide6.QtGui import QBrush, QColor, QFontMetricsF, QPainter, QPainterPath, QPalette, QPen, QTextCursor
+from PySide6.QtWidgets import QListView, QStyle, QStyledItemDelegate, QStyleOptionViewItem, QTextEdit
 
 from pyqcodeeditor import utils as qce_utils
 from pyqcodeeditor.highlighters.QHighlightBlockRule import QHighlightBlockRule
@@ -134,10 +134,17 @@ class PythonCodeEditor(QCodeEditor):
 
         cursRect = self.cursorRect()
         cursRect.setWidth(
-            self._completer.popup().sizeHintForColumn(0)
-            + self._completer.popup().verticalScrollBar().sizeHint().width()
+            max(
+                self._completer.popup().sizeHintForColumn(0)
+                + self._completer.popup().verticalScrollBar().sizeHint().width(),
+                self._POPUP_MIN_WIDTH,
+            )
         )
         self._completer.complete(cursRect)
+        # complete() 后手动修正弹窗高度，消除底部多余间隙
+        popup = self._completer.popup()
+        if isinstance(popup, _WrapAroundListView):
+            popup._adjustHeightToContent()
 
     def _wordUnderCursor(self) -> str:
         """重写补全前缀提取：从光标位置向左扫描 Python 标识符字符
@@ -392,6 +399,8 @@ class PythonCodeEditor(QCodeEditor):
 
     # ---- 补全弹窗样式 ----
 
+    _POPUP_MIN_WIDTH = 220  # 补全弹窗最小宽度（像素）
+
     def setupCompleterPopupStyle(self):
         """配置补全弹窗的视觉样式，使其与项目设计语言一致
 
@@ -401,12 +410,15 @@ class PythonCodeEditor(QCodeEditor):
         if not completer:
             return
 
-        # 使用支持循环导航的自定义 popup 替换默认 popup
+        # 使用支持循环导航 + 圆角绘制的自定义 popup 替换默认 popup
         popup = _WrapAroundListView()
+        popup.setObjectName("completerPopup")
         completer.setPopup(popup)
 
-        # 设置窗口属性以支持圆角和纤细描边（去除系统默认窗口框架）
-        # popup 作为顶层弹出窗口，需要在其自身或其 window() 上设置
+        # 使用紧凑行高的 delegate 控制 item 高度
+        popup.setItemDelegate(_CompactItemDelegate(popup))
+
+        # 设置窗口属性以支持圆角（去除系统默认窗口框架，启用透明背景）
         target = popup.window()
         target.setWindowFlag(Qt.FramelessWindowHint, True)
         target.setWindowFlag(Qt.NoDropShadowWindowHint, True)
@@ -566,14 +578,151 @@ class FixedLineNumberArea(_QLineNumberArea):
 # 补全弹窗循环导航支持
 # ============================================================
 
-class _WrapAroundListView(QListView):
-    """支持循环导航的 QListView，用作 QCompleter 的 popup
+class _CompactItemDelegate(QStyledItemDelegate):
+    """紧凑行高的 item delegate，手动绘制带圆角裁剪的 item 背景
 
-    QCompleter 的 event filter 在边界处（第一项按上键 / 最后一项按下键）
-    会将 currentIndex 设为无效（row=-1），导致选中态消失，需要额外按一次
-    键才能跳到对端。此子类拦截这一行为，在 currentIndex 变为无效时立即
-    跳转到对端，实现无缝循环导航。
+    QSS 中 item 背景设为 transparent，由此 delegate 在 paint() 中
+    手动绘制选中/悬停背景，并设置与弹窗边框一致的圆角 clip path，
+    确保 item 背景不会超出圆角边框范围。
     """
+
+    _VERTICAL_PADDING = 2  # 文字上下各留 2px
+
+    def sizeHint(self, option, index):
+        size = super().sizeHint(option, index)
+        fm = option.fontMetrics
+        size.setHeight(fm.height() + self._VERTICAL_PADDING * 2)
+        return size
+
+    def paint(self, painter, option, index):
+        """先绘制带圆角裁剪的 item 背景，再以正确的文字颜色绘制文本"""
+        listView = option.widget
+        isSelected = bool(option.state & QStyle.State_Selected)
+        isHovered = bool(option.state & QStyle.State_MouseOver)
+        bgColor = None
+        if isSelected and listView:
+            bgColor = listView.selBg
+        elif isHovered and listView:
+            bgColor = listView.hoverBg
+
+        if bgColor and bgColor.isValid() and listView:
+            painter.save()
+            painter.setRenderHint(QPainter.Antialiasing, True)
+            # 构建与弹窗边框一致的圆角裁剪路径
+            vp = listView.viewport()
+            vpRect = QRectF(vp.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
+            clipPath = QPainterPath()
+            clipPath.addRoundedRect(vpRect, _WrapAroundListView._BORDER_RADIUS,
+                                    _WrapAroundListView._BORDER_RADIUS)
+            painter.setClipPath(clipPath)
+            # 在裁剪区域内绘制 item 背景
+            painter.fillRect(QRectF(option.rect), bgColor)
+            painter.restore()
+
+        # 根据选中/未选中状态设置不同的文字颜色
+        if listView:
+            fgColor = listView.selFg if isSelected else listView.fg
+            if fgColor and fgColor.isValid():
+                option = QStyleOptionViewItem(option)  # 拷贝以避免修改原始 option
+                option.palette.setColor(QPalette.ColorRole.Text, fgColor)
+                option.palette.setColor(QPalette.ColorRole.HighlightedText, fgColor)
+
+        # 父类绘制文字等内容（背景已由上面手动绘制，QSS 中 item 背景为 transparent）
+        super().paint(painter, option, index)
+
+
+def _completer_color_property(attr: str) -> Property:
+    """为补全弹窗颜色生成 Qt Property（供 QSS qproperty- 使用）"""
+    return Property(
+        QColor,
+        lambda self: getattr(self, attr),
+        lambda self, c: (setattr(self, attr, QColor(c)), self.update()),
+    )
+
+
+class _WrapAroundListView(QListView):
+    """支持循环导航和圆角绘制的 QListView，用作 QCompleter 的 popup
+
+    功能：
+    1. 循环导航：QCompleter 在边界处会将 currentIndex 设为无效（row=-1），
+       此子类拦截并跳转到对端，实现无缝循环。
+    2. 圆角边框：在 FramelessWindowHint + TranslucentBackground 下，
+       QSS 的 border/border-radius 会被裁剪。此子类通过 paintEvent
+       手绘圆角矩形背景和边框来实现视觉效果。
+
+    颜色属性通过 QSS qproperty- 设置，例如：
+        _WrapAroundListView#completerPopup { qproperty-bgColor: #282C34; }
+    """
+
+    _BORDER_RADIUS = 6  # 圆角半径（像素）
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+
+        # 颜色属性默认值（可通过 QSS qproperty 覆盖）
+        self._bgColor = QColor("#282C34")
+        self._borderColor = QColor("#3E4451")
+        self._selBg = QColor("#3E4451")
+        self._hoverBg = QColor("#2C313A")
+        self._fg = QColor("#ABB2BF")
+        self._selFg = QColor("#D7DAE0")
+        self._scrollColor = QColor("#4B5263")
+
+    # ---- Qt Property: 颜色（供 QSS qproperty- 使用） ----
+
+    bgColor = _completer_color_property('_bgColor')
+    borderColor = _completer_color_property('_borderColor')
+    selBg = _completer_color_property('_selBg')
+    hoverBg = _completer_color_property('_hoverBg')
+    fg = _completer_color_property('_fg')
+    selFg = _completer_color_property('_selFg')
+    scrollColor = _completer_color_property('_scrollColor')
+
+    def _adjustHeightToContent(self):
+        """根据实际 item 总高度调整弹窗窗口大小"""
+        model = self.model()
+        if not model:
+            return
+        rowCount = model.rowCount()
+        if rowCount <= 0:
+            return
+        # 计算所有可见 item 的总高度
+        totalHeight = sum(self.sizeHintForRow(i) for i in range(rowCount))
+        # 加上 viewport 与窗口之间的边距差（frame、margins 等）
+        window = self.window()
+        extraHeight = window.height() - self.viewport().height()
+        newHeight = totalHeight + extraHeight
+        if newHeight != window.height():
+            window.resize(window.width(), newHeight)
+
+    def paintEvent(self, event):
+        """圆角背景 → 父类绘制（含 delegate 裁剪的 item 背景）→ 圆角边框"""
+        vp = self.viewport()
+        rect = QRectF(vp.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
+        r = self._BORDER_RADIUS
+
+        # 第一步：绘制圆角背景
+        if self._bgColor.isValid():
+            painter = QPainter(vp)
+            painter.setRenderHint(QPainter.Antialiasing, True)
+            bgPath = QPainterPath()
+            bgPath.addRoundedRect(rect, r, r)
+            painter.fillPath(bgPath, QBrush(self._bgColor))
+            painter.end()
+
+        # 第二步：父类绘制列表内容（item 背景由 delegate 带圆角裁剪绘制）
+        super().paintEvent(event)
+
+        # 第三步：绘制圆角边框（在所有内容之上）
+        if self._borderColor.isValid():
+            painter = QPainter(vp)
+            painter.setRenderHint(QPainter.Antialiasing, True)
+            borderPath = QPainterPath()
+            borderPath.addRoundedRect(rect, r, r)
+            painter.setPen(QPen(self._borderColor, 1.0))
+            painter.setBrush(Qt.NoBrush)
+            painter.drawPath(borderPath)
+            painter.end()
 
     def currentChanged(self, current, previous):
         super().currentChanged(current, previous)
