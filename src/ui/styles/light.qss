@@ -614,10 +614,6 @@ QListView#completerPopup {
     qproperty-scrollColor: #B8B9BC;
 }
 
-QListView#completerPopup QScrollBar::handle:vertical {
-    background-color: #B8B9BC;
-}
-
 /* ============================================================
  * 日志页
  * ============================================================ */

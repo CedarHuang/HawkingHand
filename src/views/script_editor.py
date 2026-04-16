@@ -135,8 +135,7 @@ class PythonCodeEditor(QCodeEditor):
         cursRect = self.cursorRect()
         cursRect.setWidth(
             max(
-                self._completer.popup().sizeHintForColumn(0)
-                + self._completer.popup().verticalScrollBar().sizeHint().width(),
+                self._completer.popup().sizeHintForColumn(0),
                 self._POPUP_MIN_WIDTH,
             )
         )
@@ -669,10 +668,13 @@ class _WrapAroundListView(QListView):
     """
 
     _BORDER_RADIUS = 6  # 圆角半径（像素）
+    _SCROLLBAR_WIDTH = 6  # overlay 滚动条宽度（像素）
+    _SCROLLBAR_MIN_HEIGHT = 16  # 滚动条最小高度（像素）
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.maxVisibleItems = 10  # 最大可见行数，由 setupCompleterPopupStyle 设置
+        self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)  # 隐藏原生滚动条，改用手绘 overlay
 
         # 颜色属性默认值（可通过 QSS qproperty 覆盖）
         self._bgColor = QColor("#282C34")
@@ -720,7 +722,7 @@ class _WrapAroundListView(QListView):
             window.resize(window.width(), newHeight)
 
     def paintEvent(self, event):
-        """圆角背景 → 父类绘制（含 delegate 裁剪的 item 背景）→ 圆角边框"""
+        """圆角背景 → 父类绘制 → overlay 滚动条 → 圆角边框"""
         vp = self.viewport()
         rect = QRectF(vp.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
         r = self._BORDER_RADIUS
@@ -737,7 +739,10 @@ class _WrapAroundListView(QListView):
         # 第二步：父类绘制列表内容（item 背景由 delegate 带圆角裁剪绘制）
         super().paintEvent(event)
 
-        # 第三步：绘制圆角边框（在所有内容之上）
+        # 第三步：绘制 overlay 滚动条（仅在内容可滚动时显示）
+        self._paintOverlayScrollbar(vp, rect)
+
+        # 第四步：绘制圆角边框（在所有内容之上）
         if self._borderColor.isValid():
             painter = QPainter(vp)
             painter.setRenderHint(QPainter.Antialiasing, True)
@@ -747,6 +752,55 @@ class _WrapAroundListView(QListView):
             painter.setBrush(Qt.NoBrush)
             painter.drawPath(borderPath)
             painter.end()
+
+    def _paintOverlayScrollbar(self, vp, clipRect):
+        """在 viewport 右侧绘制 overlay 风格的滚动条
+
+        滚动条紧贴弹窗右边缘、从顶到底铺满，由圆角裁剪路径自然裁切，
+        与弹窗融为一体。仅当内容溢出时才绘制。
+        """
+        scrollBar = self.verticalScrollBar()
+        if not scrollBar or scrollBar.maximum() <= 0:
+            return  # 内容未溢出，无需滚动条
+
+        scrollColor = self._scrollColor
+        if not scrollColor or not scrollColor.isValid():
+            return
+
+        w = self._SCROLLBAR_WIDTH
+        # 轨道从顶到底铺满整个弹窗高度
+        trackTop = clipRect.top()
+        trackHeight = clipRect.height()
+        if trackHeight <= 0:
+            return
+
+        # 通过 scrollBar 的 value / maximum 计算精确进度
+        sbMax = scrollBar.maximum()
+        sbVal = scrollBar.value()
+        sbPage = scrollBar.pageStep()
+        sbTotal = sbMax + sbPage  # 逻辑总范围
+
+        # 手柄高度按 pageStep / total 比例计算
+        handleHeight = max(trackHeight * (sbPage / sbTotal), self._SCROLLBAR_MIN_HEIGHT)
+        # 手柄位置按 value / maximum 比例计算
+        handleTop = trackTop + (trackHeight - handleHeight) * (sbVal / sbMax) if sbMax > 0 else trackTop
+
+        # 绘制：紧贴右边缘，无间距
+        handleRect = QRectF(
+            clipRect.right() - w,
+            handleTop,
+            w,
+            handleHeight,
+        )
+        painter = QPainter(vp)
+        # 裁剪到圆角区域内，滚动条顶部/底部被自然裁切
+        clip = QPainterPath()
+        clip.addRoundedRect(clipRect, self._BORDER_RADIUS, self._BORDER_RADIUS)
+        painter.setClipPath(clip)
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(scrollColor)
+        painter.drawRect(handleRect)
+        painter.end()
 
     def currentChanged(self, current, previous):
         super().currentChanged(current, previous)
