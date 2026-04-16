@@ -10,7 +10,7 @@ Python 代码编辑器组件
 import json
 
 from PySide6.QtCore import Qt, QPointF, QRectF, QRegularExpression, QFile, QIODevice, Property
-from PySide6.QtGui import QBrush, QColor, QFontMetricsF, QPainter, QPainterPath, QPalette, QPen, QTextCursor
+from PySide6.QtGui import QBrush, QColor, QFontMetricsF, QPainter, QPainterPath, QPalette, QPen, QTextCursor, QTextFormat
 from PySide6.QtWidgets import QListView, QStyle, QStyledItemDelegate, QStyleOptionViewItem, QTextEdit
 
 from pyqcodeeditor import utils as qce_utils
@@ -175,6 +175,23 @@ class PythonCodeEditor(QCodeEditor):
         tc.movePosition(QTextCursor.Left, QTextCursor.KeepAnchor, prefixLen)
         tc.insertText(s)
         self.setTextCursor(tc)
+
+    # ---- 当前行高亮修复 ----
+
+    def _highlightCurrentLine(self, extraSelection):
+        """重写父类方法：修复缺少 FullWidthSelection 导致当前行背景不可见的问题
+
+        QCodeEditor 库的原始实现未设置 QTextFormat.FullWidthSelection，
+        导致背景色只覆盖有文字的区域，空行或行尾之后完全不可见。
+        """
+        if not self.isReadOnly():
+            selection = QTextEdit.ExtraSelection()
+            selection.format = self._syntaxStyle.getFormat("CurrentLine")
+            selection.format.setForeground(QBrush())
+            selection.format.setProperty(QTextFormat.FullWidthSelection, True)
+            selection.cursor = self.textCursor()
+            selection.cursor.clearSelection()
+            extraSelection.append(selection)
 
     # ---- 编辑器初始化 ----
 
