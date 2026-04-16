@@ -73,6 +73,7 @@ _KIND_COLORS = {
 # QCompleter 用于获取补全文本的自定义 role
 COMPLETION_TEXT_ROLE = Qt.UserRole + 1
 COMPLETION_KIND_ROLE = Qt.UserRole + 2
+COMPLETION_IS_API_ROLE = Qt.UserRole + 3  # 是否为项目 API 符号
 
 
 class CompletionModel(QAbstractListModel):
@@ -85,18 +86,28 @@ class CompletionModel(QAbstractListModel):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self._items: list[tuple[str, CompletionKind]] = []  # (text, kind)
+        self._items: list[tuple[str, CompletionKind, bool]] = []  # (text, kind, is_api)
 
-    def setItems(self, items: list[tuple[str, CompletionKind]]):
-        """设置补全词汇列表（自动排序去重）"""
+    def setItems(self, items: list[tuple[str, CompletionKind]] | list[tuple[str, CompletionKind, bool]]):
+        """设置补全词汇列表（自动排序去重）
+
+        items 中的元素可以是 (text, kind) 或 (text, kind, is_api) 格式。
+        """
         self.beginResetModel()
-        # 去重：相同 text 保留优先级最高（数值最小）的 kind
-        seen = {}  # text -> kind
-        for text, kind in items:
-            if text not in seen or kind < seen[text]:
-                seen[text] = kind
+        # 去重：相同 text 保留优先级最高（数值最小）的 kind，is_api 取 True 优先
+        seen: dict[str, tuple[CompletionKind, bool]] = {}
+        for item in items:
+            text, kind = item[0], item[1]
+            is_api = item[2] if len(item) > 2 else False
+            if text not in seen or kind < seen[text][0]:
+                seen[text] = (kind, is_api)
+            elif kind == seen[text][0] and is_api:
+                seen[text] = (kind, True)
         # 排序：先按 kind 优先级，同 kind 按字典序
-        self._items = sorted(seen.items(), key=lambda x: (x[1], x[0].lower()))
+        self._items = sorted(
+            ((t, k, a) for t, (k, a) in seen.items()),
+            key=lambda x: (x[1], x[0].lower()),
+        )
         self.endResetModel()
 
     def rowCount(self, parent=QModelIndex()):
@@ -105,11 +116,13 @@ class CompletionModel(QAbstractListModel):
     def data(self, index, role=Qt.DisplayRole):
         if not index.isValid() or index.row() >= len(self._items):
             return None
-        text, kind = self._items[index.row()]
+        text, kind, is_api = self._items[index.row()]
         if role == Qt.DisplayRole or role == COMPLETION_TEXT_ROLE:
             return text
         if role == COMPLETION_KIND_ROLE:
             return kind
+        if role == COMPLETION_IS_API_ROLE:
+            return is_api
         return None
 
 
@@ -749,7 +762,44 @@ class _CompactItemDelegate(QStyledItemDelegate):
             painter.setPen(option.palette.color(QPalette.ColorRole.Text))
         painter.drawText(textRect, Qt.AlignVCenter | Qt.AlignLeft, text)
 
+        # ---- 绘制 API 标签 ----
+        is_api = index.data(COMPLETION_IS_API_ROLE)
+        if is_api:
+            self._paintApiTag(painter, option, rect, isSelected)
+
         painter.restore()
+
+    def _paintApiTag(self, painter: QPainter, option: QStyleOptionViewItem,
+                     rect: QRectF, isSelected: bool):
+        """在补全项右侧绘制 'API' 小标签，标识该符号来自项目 API"""
+        tagText = "API"
+        tagFont = QFont(option.font)
+        tagFont.setPointSizeF(option.font.pointSizeF() * 0.7)
+        tagFont.setBold(True)
+        tagFm = QFontMetricsF(tagFont)
+        tagWidth = tagFm.horizontalAdvance(tagText) + 8  # 左右各 4px 内边距
+        tagHeight = tagFm.height() + 2
+        tagRight = rect.right() - 8  # 距右边缘 8px
+        tagRect = QRectF(
+            tagRight - tagWidth,
+            rect.top() + (rect.height() - tagHeight) / 2,
+            tagWidth,
+            tagHeight,
+        )
+        # 标签颜色：复用 FUNCTION 图标色，半透明处理
+        baseColor = _KIND_COLORS[CompletionKind.FUNCTION]
+        tagBgColor = QColor(baseColor)
+        tagBgColor.setAlpha(30 if isSelected else 20)
+        tagFgColor = QColor(baseColor)
+        tagFgColor.setAlpha(200 if isSelected else 160)
+
+        painter.setRenderHint(QPainter.Antialiasing, True)
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(tagBgColor)
+        painter.drawRoundedRect(tagRect, 3, 3)
+        painter.setFont(tagFont)
+        painter.setPen(tagFgColor)
+        painter.drawText(tagRect, Qt.AlignCenter, tagText)
 
 
 def _completer_color_property(attr: str) -> Property:

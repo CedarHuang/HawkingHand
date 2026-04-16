@@ -242,11 +242,13 @@ class ScriptEditPage(QWidget):
         # 从 Python builtins + keyword 模块自省获取内置词汇
         baseItems.extend(self._buildPythonBuiltinItems())
 
-        # 从 __builtins__.py 中通过 AST 解析提取 API 符号（高优先级）
+        # 从 __builtins__.py 中通过 AST 解析提取 API 符号（高优先级，标记为项目 API）
         builtinsPath = common.builtins_path()
         try:
             with open(builtinsPath, "r", encoding="utf-8") as f:
-                baseItems.extend(self._extractSymbolsWithKind(f.read()))
+                apiSymbols = self._extractSymbolsWithKind(f.read())
+                # 将 (text, kind) 扩展为 (text, kind, True) 标记为项目 API
+                baseItems.extend((text, kind, True) for text, kind in apiSymbols)
         except Exception as e:
             logger.app.warning(f"Failed to parse builtins for completion: {e}")
 
