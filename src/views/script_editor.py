@@ -218,29 +218,28 @@ class PythonCodeEditor(QCodeEditor):
         isEmpty = len(text) <= 0
         if not self._completer or (ctrlOrShift and isEmpty) or key == Qt.Key_Delete:
             return
+        popup = self._completer.popup()
         eow = r""""(~!@#$%^&*()+{}|:"<>?,./;'[]\-=)"""
         isShortcut = qce_utils.is_shortcut(e, Qt.ControlModifier, Qt.Key_Space)
         completionPrefix = self._wordUnderCursor()
         isContainChar = len(text) > 0 and (text[-1] in eow)
         # 将阈值从 < 2 改为 < 1，输入 1 个字符即触发补全
         if (not isShortcut) and (isEmpty or len(completionPrefix) < 1 or isContainChar):
-            self._completer.popup().hide()
+            popup.hide()
             return
 
         if completionPrefix != self._completer.completionPrefix():
             self._completer.setCompletionPrefix(completionPrefix)
-            self._completer.popup().setCurrentIndex(
-                self._completer.completionModel().index(0, 0)
-            )
 
         cursRect = self.cursorRect()
         cursRect.setWidth(
             max(
-                self._completer.popup().sizeHintForColumn(0),
+                popup.sizeHintForColumn(0),
                 self._POPUP_MIN_WIDTH,
             )
         )
         self._completer.complete(cursRect)
+        popup.setCurrentIndex(self._completer.completionModel().index(0, 0))
 
     def _wordUnderCursor(self) -> str:
         """重写补全前缀提取：从光标位置向左扫描 Python 标识符字符
@@ -857,6 +856,16 @@ class _WrapAroundListView(QListView):
     fg = _completer_color_property('_fg')
     selFg = _completer_color_property('_selFg')
     scrollColor = _completer_color_property('_scrollColor')
+
+    def showEvent(self, event):
+        """每次弹窗显示时校正高度
+
+        弹窗隐藏后再次显示相同内容时，complete() 设置的窗口尺寸
+        可能与上次相同，不触发有效的 resizeEvent，导致高度校正被跳过。
+        在 showEvent 中补做一次，确保弹窗高度始终精确。
+        """
+        super().showEvent(event)
+        QTimer.singleShot(0, self._adjustHeightToContent)
 
     def resizeEvent(self, event):
         """拦截外部对弹窗的 resize，延迟修正为精确高度
