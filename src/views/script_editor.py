@@ -701,37 +701,35 @@ class _CompactItemDelegate(QStyledItemDelegate):
         return size
 
     def paint(self, painter, option, index):
-        """先绘制带圆角裁剪的 item 背景，再绘制类型图标和文本"""
+        """绘制选中/悬停高亮 → 类型图标 → 文本
+
+        底色由 _WrapAroundListView.paintEvent 第一步的 AA 圆角 fillPath
+        统一负责；delegate 只负责高亮叠加，带 AA + 圆角 clip 使首尾 item
+        的高亮与弹窗圆角平滑贴合。选中态切换时残留由 currentChanged 中
+        触发对 previous/current 两行的 update() 消除。
+        """
         listView = option.widget
         isSelected = bool(option.state & QStyle.State_Selected)
         isHovered = bool(option.state & QStyle.State_MouseOver)
 
-        # 始终用 viewport 背景色填充 item 区域（整数坐标，无裁剪），
-        # 确保旧选中态的亚像素残留被完全覆盖
-        if listView and listView.bgColor.isValid():
-            painter.fillRect(option.rect, listView.bgColor)
-
-        # 选中/悬停态叠加高亮背景（带圆角裁剪防止溢出弹窗边框）
+        # 预计算背景色与文字色（无 listView 时全部为 None，后续分别判空）
         bgColor = None
-        if isSelected and listView:
-            bgColor = listView.selBg
-        elif isHovered and listView:
-            bgColor = listView.hoverBg
-        if bgColor and bgColor.isValid() and listView:
+        fgColor = None
+        if listView:
+            bgColor = listView.selBg if isSelected else (listView.hoverBg if isHovered else None)
+            fgColor = listView.selFg if isSelected else listView.fg
+
+        # ---- 高亮叠加（圆角 clip 防止首尾 item 溢出弹窗圆角外）----
+        if bgColor and bgColor.isValid():
             painter.save()
-            vp = listView.viewport()
+            painter.setRenderHint(QPainter.Antialiasing, True)
             clipPath = QPainterPath()
-            clipPath.addRoundedRect(QRectF(vp.rect()),
+            clipPath.addRoundedRect(QRectF(listView.viewport().rect()),
                                     _WrapAroundListView._BORDER_RADIUS,
                                     _WrapAroundListView._BORDER_RADIUS)
             painter.setClipPath(clipPath)
             painter.fillRect(option.rect, bgColor)
             painter.restore()
-
-        # 确定文字颜色
-        fgColor = None
-        if listView:
-            fgColor = listView.selFg if isSelected else listView.fg
 
         rect = option.rect
         kind = index.data(COMPLETION_KIND_ROLE)
@@ -897,32 +895,29 @@ class _WrapAroundListView(QListView):
         """圆角背景 → 父类绘制 → overlay 滚动条 → 圆角边框"""
         vp = self.viewport()
         rect = QRectF(vp.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
-        r = self._BORDER_RADIUS
+        roundedPath = QPainterPath()
+        roundedPath.addRoundedRect(rect, self._BORDER_RADIUS, self._BORDER_RADIUS)
 
         # 第一步：绘制圆角背景
         if self._bgColor.isValid():
             painter = QPainter(vp)
             painter.setRenderHint(QPainter.Antialiasing, True)
-            bgPath = QPainterPath()
-            bgPath.addRoundedRect(rect, r, r)
-            painter.fillPath(bgPath, QBrush(self._bgColor))
+            painter.fillPath(roundedPath, QBrush(self._bgColor))
             painter.end()
 
-        # 第二步：父类绘制列表内容（item 背景由 delegate 带圆角裁剪绘制）
+        # 第二步：父类绘制列表内容（delegate 仅叠加高亮 + 图标 + 文本）
         super().paintEvent(event)
 
         # 第三步：绘制 overlay 滚动条（仅在内容可滚动时显示）
         self._paintOverlayScrollbar(vp, rect)
 
-        # 第四步：绘制圆角边框（在所有内容之上）
+        # 第四步：绘制圆角边框（带 AA，复用同一条圆角路径）
         if self._borderColor.isValid():
             painter = QPainter(vp)
             painter.setRenderHint(QPainter.Antialiasing, True)
-            borderPath = QPainterPath()
-            borderPath.addRoundedRect(rect, r, r)
             painter.setPen(QPen(self._borderColor, 1.0))
             painter.setBrush(Qt.NoBrush)
-            painter.drawPath(borderPath)
+            painter.drawPath(roundedPath)
             painter.end()
 
     def _paintOverlayScrollbar(self, vp, clipRect):
@@ -976,6 +971,12 @@ class _WrapAroundListView(QListView):
 
     def currentChanged(self, current, previous):
         super().currentChanged(current, previous)
+        # 强制整个 viewport 重绘，让 paintEvent 第一步的 AA 圆角底统一
+        # 刷新脏区域，消除旧高亮的 AA α 边缘残留。
+        # 曾尝试只 update previous/current 两行的 visualRect 以减少重绘范围，
+        # 但实测仍会出现细线残留（item rect 内的 α 边缘未被新一帧的 bg
+        # fillPath 覆盖），因此保持全量刷新。
+        self.viewport().update()
         if current.isValid() or not previous.isValid():
             return
         # currentIndex 从有效变为无效（-1），说明到达边界
