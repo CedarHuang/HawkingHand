@@ -246,7 +246,7 @@ class ScriptEditPage(QWidget):
         builtinsPath = common.builtins_path()
         try:
             with open(builtinsPath, "r", encoding="utf-8") as f:
-                apiSymbols = self._extractSymbolsWithKind(f.read())
+                apiSymbols = self._extractSymbolsWithKind(f.read(), top_level_only=True)
                 # 将 (text, kind) 扩展为 (text, kind, True) 标记为项目 API
                 baseItems.extend((text, kind, True) for text, kind in apiSymbols)
         except Exception as e:
@@ -320,14 +320,17 @@ class ScriptEditPage(QWidget):
         return items
 
     @staticmethod
-    def _extractSymbolsWithKind(source: str) -> list[tuple[str, CompletionKind]]:
-        """通过 AST 解析提取源码中的顶层公开符号名及其类型
+    def _extractSymbolsWithKind(source: str, *, top_level_only: bool = False
+                                ) -> list[tuple[str, CompletionKind]]:
+        """通过 AST 解析提取源码中的公开符号名及其类型
 
-        提取函数名、类名、变量名、函数参数名、导入名等，
-        过滤掉以下划线开头的私有符号。
+        提取函数名、类名、变量名、导入名等，过滤掉以下划线开头的私有符号。
 
         Args:
             source: Python 源码文本
+            top_level_only: 若为 True，只提取模块顶层定义（函数名、类名、
+                顶层变量、导入名），不深入函数体提取参数等内部符号。
+                适用于解析 __builtins__.py 等 API 声明文件。
 
         Returns:
             (符号名, CompletionKind) 元组列表；解析失败时返回空列表
@@ -344,28 +347,36 @@ class ScriptEditPage(QWidget):
                 if name not in symbols or kind < symbols[name]:
                     symbols[name] = kind
 
-        for node in ast.walk(tree):
+        # top_level_only 只遍历顶层语句（API 声明），否则深度遍历所有节点（用户上下文）
+        nodes = ast.iter_child_nodes(tree) if top_level_only else ast.walk(tree)
+        for node in nodes:
             if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 _add(node.name, CompletionKind.FUNCTION)
-                for arg in node.args.args + node.args.posonlyargs + node.args.kwonlyargs:
-                    _add(arg.arg, CompletionKind.VARIABLE)
-                if node.args.vararg:
-                    _add(node.args.vararg.arg, CompletionKind.VARIABLE)
-                if node.args.kwarg:
-                    _add(node.args.kwarg.arg, CompletionKind.VARIABLE)
+                if not top_level_only:
+                    # 用户上下文场景：提取函数参数名
+                    for arg in node.args.args + node.args.posonlyargs + node.args.kwonlyargs:
+                        _add(arg.arg, CompletionKind.VARIABLE)
+                    if node.args.vararg:
+                        _add(node.args.vararg.arg, CompletionKind.VARIABLE)
+                    if node.args.kwarg:
+                        _add(node.args.kwarg.arg, CompletionKind.VARIABLE)
             elif isinstance(node, ast.ClassDef):
                 _add(node.name, CompletionKind.CLASS)
-            elif isinstance(node, ast.Name) and isinstance(node.ctx, ast.Store):
-                _add(node.id, CompletionKind.VARIABLE)
-            elif isinstance(node, ast.Import):
+            elif isinstance(node, (ast.Import, ast.ImportFrom)):
                 for alias in node.names:
                     _add(alias.asname or alias.name, CompletionKind.MODULE)
-            elif isinstance(node, ast.ImportFrom):
-                for alias in node.names:
-                    _add(alias.asname or alias.name, CompletionKind.MODULE)
-            elif isinstance(node, ast.Global):
-                for name in node.names:
-                    _add(name, CompletionKind.VARIABLE)
+            elif isinstance(node, ast.Assign):
+                for target in node.targets:
+                    if isinstance(target, ast.Name):
+                        _add(target.id, CompletionKind.VARIABLE)
+            elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+                _add(node.target.id, CompletionKind.VARIABLE)
+            elif not top_level_only:
+                if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Store):
+                    _add(node.id, CompletionKind.VARIABLE)
+                elif isinstance(node, ast.Global):
+                    for name in node.names:
+                        _add(name, CompletionKind.VARIABLE)
 
         return list(symbols.items())
 
