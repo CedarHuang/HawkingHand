@@ -560,39 +560,41 @@ class PythonCodeEditor(QCodeEditor):
         while block.isValid():
             blockRect = docLayout.blockBoundingRect(block)
             # 将文档坐标转换为 viewport 坐标（减去滚动偏移）
-            top = blockRect.top() - scrollY
-            height = blockRect.height()
-            if top > viewportRect.bottom():
+            blockTop = blockRect.top() - scrollY
+            if blockTop > viewportRect.bottom():
                 break
-            if block.isVisible() and top + height >= viewportRect.top():
+            if block.isVisible() and blockTop + blockRect.height() >= viewportRect.top():
                 text = block.text()
-                tabDist = self.tabStopDistance()
-                leftOffset = blockRect.left()  # 文档内容区域的左侧偏移（含文档边距）
-                x = 0.0  # 相对于文本起始位置的累计偏移
-                for ch in text:
+                layout = block.layout()
+                # 通过 QTextLayout 精确定位每个字符，天然支持折行
+                for i, ch in enumerate(text):
+                    if ch != ' ' and ch != '\t':
+                        continue
+                    line = layout.lineForTextPosition(i)
+                    if not line.isValid():
+                        continue
+                    # line.y() 是相对于 block 顶部的偏移
+                    lineY = blockTop + line.y()
+                    lineH = line.height()
+                    charX = line.cursorToX(i)[0] + blockRect.left()
                     if ch == ' ':
-                        charRect = QRectF(leftOffset + x, top, spaceWidth, height)
+                        charRect = QRectF(charX, lineY, spaceWidth, lineH)
                         painter.drawText(charRect, Qt.AlignCenter, dot)
-                        x += spaceWidth
-                    elif ch == '\t':
-                        # 对齐到下一个 tab stop
-                        nextStop = (int(x / tabDist) + 1) * tabDist
-                        tabWidth = nextStop - x
+                    else:
+                        # Tab：获取下一个位置的 x 来确定 Tab 宽度
+                        nextX = line.cursorToX(i + 1)[0] + blockRect.left()
+                        tabWidth = nextX - charX
                         # 绘制占满 Tab 宽度的箭头线：—————→
-                        padding = spaceWidth * 0.3  # 左右留少量内边距
-                        midY = top + height / 2.0
-                        lineX1 = leftOffset + x + padding
-                        lineX2 = leftOffset + x + tabWidth - padding
+                        padding = spaceWidth * 0.3
+                        midY = lineY + lineH / 2.0
+                        lineX1 = charX + padding
+                        lineX2 = charX + tabWidth - padding
                         arrowSize = min(spaceWidth * 0.35, tabWidth * 0.15)
                         painter.drawLine(QPointF(lineX1, midY), QPointF(lineX2, midY))
-                        # 箭头尖（右端两条短斜线）
                         painter.drawLine(QPointF(lineX2, midY),
                                          QPointF(lineX2 - arrowSize, midY - arrowSize))
                         painter.drawLine(QPointF(lineX2, midY),
                                          QPointF(lineX2 - arrowSize, midY + arrowSize))
-                        x = nextStop
-                    else:
-                        x += fm.horizontalAdvance(ch)
             block = block.next()
 
         painter.end()
