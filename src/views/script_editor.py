@@ -704,24 +704,27 @@ class _CompactItemDelegate(QStyledItemDelegate):
         listView = option.widget
         isSelected = bool(option.state & QStyle.State_Selected)
         isHovered = bool(option.state & QStyle.State_MouseOver)
+
+        # 始终用 viewport 背景色填充 item 区域（整数坐标，无裁剪），
+        # 确保旧选中态的亚像素残留被完全覆盖
+        if listView and listView.bgColor.isValid():
+            painter.fillRect(option.rect, listView.bgColor)
+
+        # 选中/悬停态叠加高亮背景（带圆角裁剪防止溢出弹窗边框）
         bgColor = None
         if isSelected and listView:
             bgColor = listView.selBg
         elif isHovered and listView:
             bgColor = listView.hoverBg
-
         if bgColor and bgColor.isValid() and listView:
             painter.save()
-            painter.setRenderHint(QPainter.Antialiasing, True)
-            # 构建与弹窗边框一致的圆角裁剪路径
             vp = listView.viewport()
-            vpRect = QRectF(vp.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
             clipPath = QPainterPath()
-            clipPath.addRoundedRect(vpRect, _WrapAroundListView._BORDER_RADIUS,
+            clipPath.addRoundedRect(QRectF(vp.rect()),
+                                    _WrapAroundListView._BORDER_RADIUS,
                                     _WrapAroundListView._BORDER_RADIUS)
             painter.setClipPath(clipPath)
-            # 在裁剪区域内绘制 item 背景
-            painter.fillRect(QRectF(option.rect), bgColor)
+            painter.fillRect(option.rect, bgColor)
             painter.restore()
 
         # 确定文字颜色
