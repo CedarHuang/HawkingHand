@@ -3,10 +3,29 @@ import keyboard
 import sys
 import threading
 
-from core import input_backend
 from core import config
 from core import foreground_listener
+from core import input_backend
+from core import logger
 from core.scripts import scripts
+
+def _ensure_keyboard_listening():
+    # 检查 keyboard 库的 listening_thread 是否存活，若已死亡则强制恢复。
+    listener = keyboard._listener
+
+    # 获取锁后再确认状态，避免竞态
+    with listener.lock:
+        if not listener.listening:
+            return
+        # 线程对象不存在，不应发生，做防御性检查
+        if not hasattr(listener, 'listening_thread'):
+            listener.listening = False
+            logger.app.warning('keyboard listening_thread does not exist, listening flag has been reset')
+            return
+        # 线程已死亡 -> 需要恢复
+        if not listener.listening_thread.is_alive():
+            logger.app.warning('keyboard listening_thread is dead, forcing recovery')
+            listener.listening = False
 
 def _wrap_trigger_on_release(callback, keys):
     # 热键按下时挂起，所有键都释放后触发。
@@ -31,6 +50,10 @@ def _wrap_trigger_on_release(callback, keys):
     return on_press
 
 def start():
+    # keyboard 库的 listening_thread 因 GetMessage 异常退出后 listening 标志仍为 True，
+    # 导致后续 add_hotkey 不会重建线程，热键失效。因此需要一个 workaround 检测并修正此状态不一致。
+    _ensure_keyboard_listening()
+
     for event in config.events:
         if not event.enabled:
             continue
