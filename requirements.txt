@@ -1,4 +1,5 @@
 keyboard==0.13.5
+mss==10.1.0
 nuitka==4.0.7
 psutil==6.1.0
 pyqcodeeditor==0.3.7

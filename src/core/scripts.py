@@ -10,6 +10,7 @@ import watchdog.observers
 from core import api
 from core import common
 from core import logger
+from core import vision_backend
 
 class ScriptCode:
     instances = {
@@ -214,6 +215,7 @@ class Scripts:
             finally:
                 script_context.clear_stop()
                 script_context.clear_delay_flag()
+                vision_backend.close()
 
         return wrapped_function, script_context
 

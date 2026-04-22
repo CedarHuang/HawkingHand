@@ -5,11 +5,12 @@ import threading
 import win32api
 import win32con
 
-from core import input_backend
-from core.input_backend import MOUSE_LEFT, MOUSE_RIGHT, MOUSE_BUTTON
 from core import common
 from core import foreground_listener
+from core import input_backend
 from core import logger
+from core import vision_backend
+from core.input_backend import MOUSE_LEFT, MOUSE_RIGHT, MOUSE_BUTTON
 
 class ScriptExit(Exception):
     """自定义异常类，用于表示脚本的有意终止。
@@ -71,6 +72,15 @@ def _create_context(event):
         """
         def decorator(func):
             functions[name or func.__name__] = func
+            return func
+        return decorator
+
+    def replace_with(func):
+        """装饰器，将被装饰函数替换为 func。
+
+        :meta private: 内部使用。
+        """
+        def decorator(_):
             return func
         return decorator
 
@@ -288,8 +298,7 @@ def _create_context(event):
 
     @register('init')
     @_create_init
-    def _():
-        ...
+    def _(): ...
 
     @register('print')
     def _(*args, **kwargs):
@@ -436,6 +445,10 @@ def _create_context(event):
             int: 如果 Caps Lock 开启则返回 1，否则返回 0。
         """
         return win32api.GetKeyState(win32con.VK_CAPITAL)
+
+    @register()
+    @replace_with(vision_backend.get_pixel)
+    def _(): ...
 
     ############################################################################
     return functions
