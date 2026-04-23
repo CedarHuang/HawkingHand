@@ -2,15 +2,12 @@ import functools
 import inspect
 import sys
 import threading
-import win32api
-import win32con
 
 from core import common
 from core import foreground_listener
 from core import input_backend
 from core import logger
 from core import vision_backend
-from core.input_backend import MOUSE_LEFT, MOUSE_RIGHT, MOUSE_BUTTON
 
 class ScriptExit(Exception):
     """自定义异常类，用于表示脚本的有意终止。
@@ -83,6 +80,17 @@ def _create_context(event):
         def decorator(_):
             return func
         return decorator
+
+    ############################################################################
+    # 注册后端模块中的公开常量
+    for backend in (input_backend, vision_backend):
+        for name, member in vars(backend).items():
+            if name.startswith('_'):
+                continue
+            if inspect.ismodule(member) or inspect.isfunction(member) or inspect.isclass(member):
+                continue
+            if name not in functions:
+                functions[name] = member
 
     ############################################################################
     global _context_id_inc
@@ -353,98 +361,44 @@ def _create_context(event):
         process_name, window_title, _ = foreground_listener.active_window_info()
         return process_name, window_title
 
+    ############################################################################
+
     @register()
-    def position(x=-1, y=-1):
-        """获取鼠标的当前位置。
-
-        如果提供了有效的 x 和 y 坐标（大于等于 0），则直接返回这些坐标。
-        如果 x 与 y 为 -1，则获取当前鼠标位置的对应坐标。
-
-        Args:
-            x (int, optional): X坐标。如果为 -1，则使用当前鼠标的X坐标。默认为 -1。
-            y (int, optional): Y坐标。如果为 -1，则使用当前鼠标的Y坐标。默认为 -1。
-
-        Returns:
-            tuple[int, int]: 鼠标的坐标 (x, y)。
-        """
-        return input_backend.position(x, y)
+    @replace_with(input_backend.position)
+    def _(): ...
 
     @register()
     @delay
-    def click(button, x=-1, y=-1):
-        """模拟鼠标或键盘按键的点击操作。
-
-        Args:
-            button (str): 要点击的按钮或按键的名称。
-            x (int, optional): 鼠标点击的X坐标。仅当 'button' 为鼠标按钮时有效。
-                默认为 -1（表示当前鼠标X坐标）。
-            y (int, optional): 鼠标点击的Y坐标。仅当 'button' 为鼠标按钮时有效。
-                默认为 -1（表示当前鼠标Y坐标）。
-        """
-        input_backend.click(button, x, y)
+    @replace_with(input_backend.click)
+    def _(): ...
 
     @register('press')
     @register()
     @delay
-    def down(button, x=-1, y=-1):
-        """模拟鼠标或键盘按键的按下操作（不释放）。
-
-        Args:
-            button (str): 要按下的按钮或按键的名称。
-            x (int, optional): 鼠标按下的X坐标。仅当 'button' 为鼠标按钮时有效。
-                默认为 -1（表示当前鼠标X坐标）。
-            y (int, optional): 鼠标按下的Y坐标。仅当 'button' 为鼠标按钮时有效。
-                默认为 -1（表示当前鼠标Y坐标）。
-        """
-        input_backend.down(button, x, y)
+    @replace_with(input_backend.down)
+    def _(): ...
 
     @register('release')
     @register()
     @delay
-    def up(button, x=-1, y=-1):
-        """模拟鼠标或键盘按键的释放操作。
-
-        Args:
-            button (str): 要释放的按钮或按键的名称。
-                如果 'button' 在 MOUSE_BUTTON 中，则执行鼠标释放。
-                否则，视为键盘按键。
-            x (int, optional): 鼠标释放的X坐标。仅当 'button' 为鼠标按钮时有效。
-                默认为 -1（表示当前鼠标X坐标）。
-            y (int, optional): 鼠标释放的Y坐标。仅当 'button' 为鼠标按钮时有效。
-                默认为 -1（表示当前鼠标Y坐标）。
-        """
-        input_backend.up(button, x, y)
+    @replace_with(input_backend.up)
+    def _(): ...
 
     @register()
     @delay
-    def move(x_offset, y_offset):
-        """相对当前鼠标位置移动鼠标。
-
-        Args:
-            x_offset (int): X轴方向的偏移量。正值向右，负值向左。
-            y_offset (int): Y轴方向的偏移量。正值向下，负值向上。
-        """
-        input_backend.move(x_offset, y_offset)
+    @replace_with(input_backend.move)
+    def _(): ...
 
     @register()
     @delay
-    def move_to(x, y):
-        """将鼠标移动到屏幕上的指定绝对坐标。
-
-        Args:
-            x (int): 目标X坐标。
-            y (int): 目标Y坐标。
-        """
-        input_backend.move_to(x, y)
+    @replace_with(input_backend.move_to)
+    def _(): ...
 
     @register()
-    def is_caps_lock_on():
-        """检查 Caps Lock 是否开启。
+    @replace_with(input_backend.is_caps_lock_on)
+    def _(): ...
 
-        Returns:
-            int: 如果 Caps Lock 开启则返回 1，否则返回 0。
-        """
-        return win32api.GetKeyState(win32con.VK_CAPITAL)
+    ############################################################################
 
     @register()
     @replace_with(vision_backend.get_pixel)
@@ -463,9 +417,6 @@ def _generate_builtins():
     'from builtins import *',
     '',
     ]
-
-    # 常量文档
-    const_docs = getattr(input_backend, '_CONST_DOCS', {})
 
     def _append_doc(doc, indent=''):
         if doc:
@@ -502,8 +453,9 @@ def _generate_builtins():
             _append_doc(inspect.getdoc(member), '    ')
             lines.append('    ...\n')
         else:
-            lines.append(f'{name}: {type(member).__name__} = {member!r}')
-            _append_doc(const_docs.get(name))
+            annotated_type = getattr(type(member), '__annotated_type__', type(member))
+            lines.append(f'{name}: {annotated_type.__name__} = {member!r}')
+            _append_doc(inspect.getdoc(member))
             lines.append('')
 
     with open(common.builtins_path(), 'w', encoding='utf-8') as f:
