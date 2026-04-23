@@ -404,6 +404,10 @@ def _create_context(event):
     @replace_with(vision_backend.get_pixel)
     def _(): ...
 
+    @register()
+    @replace_with(vision_backend.get_pixels)
+    def _(): ...
+
     ############################################################################
     return functions
 

@@ -105,3 +105,40 @@ def get_pixel(x: int, y: int) -> tuple[int, int, int] | None:
         return None
 
     return shot.pixel(0, 0)
+
+
+def get_pixels(coordinates: list[tuple[int, int]]) -> list[tuple[int, int, int] | None]:
+    """批量获取屏幕上多个坐标的 RGB 颜色值。
+
+    通过一次截图覆盖所有目标坐标的最小包围矩形，然后从中读取各像素值，
+    比逐个调用 get_pixel() 更高效。
+
+    Args:
+        coordinates: 坐标列表，每个元素为 (x, y) 的屏幕绝对逻辑坐标。
+
+    Returns:
+        与输入坐标一一对应的 RGB 值列表。
+        如果截图失败，所有元素为 None；
+        如果某个坐标超出截图范围，对应元素为 None。
+    """
+    if not coordinates:
+        return []
+
+    xs, ys = zip(*coordinates)
+    min_x, max_x = min(xs), max(xs)
+    min_y, max_y = min(ys), max(ys)
+
+    shot = _capture_region(min_x, min_y, max_x - min_x + 1, max_y - min_y + 1)
+    if shot is None:
+        return [None] * len(coordinates)
+
+    result = []
+    for x, y in coordinates:
+        rel_x = x - min_x
+        rel_y = y - min_y
+        if 0 <= rel_x < shot.width and 0 <= rel_y < shot.height:
+            result.append(shot.pixel(rel_x, rel_y))
+        else:
+            result.append(None)
+
+    return result
