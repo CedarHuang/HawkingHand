@@ -86,6 +86,24 @@ def _capture_region(x: int, y: int, width: int, height: int) -> ScreenShot | Non
         return None
 
 
+def _read_pixel_rgb(shot: ScreenShot, x: int, y: int) -> tuple[int, int, int]:
+    """直接从截图的 raw 数据中读取指定坐标的 RGB 值。
+
+    绕过 ScreenShot.pixel()，避免触发 pixels 属性的全量构建。
+    mss 的 raw 数据为 BGRA 格式，每个像素占 4 字节。
+
+    Args:
+        shot: mss 截图对象。
+        x: 像素的 X 坐标（相对于截图左上角）。
+        y: 像素的 Y 坐标（相对于截图左上角）。
+
+    Returns:
+        像素的 RGB 值 (r, g, b)。
+    """
+    offset = (y * shot.width + x) * 4
+    return shot.raw[offset + 2], shot.raw[offset + 1], shot.raw[offset]
+
+
 def get_pixel(x: int, y: int) -> tuple[int, int, int] | None:
     """获取屏幕上指定坐标的 RGB 颜色值。
 
@@ -104,7 +122,7 @@ def get_pixel(x: int, y: int) -> tuple[int, int, int] | None:
     if shot is None:
         return None
 
-    return shot.pixel(0, 0)
+    return _read_pixel_rgb(shot, 0, 0)
 
 
 def get_pixels(coordinates: list[tuple[int, int]]) -> list[tuple[int, int, int] | None]:
@@ -137,7 +155,7 @@ def get_pixels(coordinates: list[tuple[int, int]]) -> list[tuple[int, int, int] 
         rel_x = x - min_x
         rel_y = y - min_y
         if 0 <= rel_x < shot.width and 0 <= rel_y < shot.height:
-            result.append(shot.pixel(rel_x, rel_y))
+            result.append(_read_pixel_rgb(shot, rel_x, rel_y))
         else:
             result.append(None)
 
