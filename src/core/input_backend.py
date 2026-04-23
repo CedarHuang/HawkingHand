@@ -1,6 +1,7 @@
 import keyboard
 import win32api
 import win32con
+from contextlib import contextmanager
 
 from core import _DocumentedStr, _DocumentedTuple
 
@@ -39,6 +40,21 @@ def _resolve_button(button: str) -> tuple[bool, str]:
         return True, button
     return False, button
 
+@contextmanager
+def _safe_keyboard():
+    """安全执行 keyboard 操作的上下文管理器。
+
+    keyboard 库的 send() 在执行时会将 is_replaying 设为 True 以避免重放事件，
+    但如果 parse_hotkey() 抛出异常，is_replaying 将永远不会被重置为 False，
+    导致所有后续键盘事件被静默忽略（热键全部失效）。
+    此上下文管理器确保异常发生时重置该状态。
+    """
+    try:
+        yield
+    except ValueError:
+        keyboard._listener.is_replaying = False
+        raise
+
 def position(x: int = -1, y: int = -1) -> tuple[int, int]:
     """获取鼠标的当前位置。
 
@@ -75,7 +91,8 @@ def click(button: str, x: int = -1, y: int = -1) -> None:
         _mouse_event(actual, _DOWN, x, y)
         _mouse_event(actual, _UP, x, y)
     else:
-        keyboard.press_and_release(actual)
+        with _safe_keyboard():
+            keyboard.press_and_release(actual)
 
 def down(button: str, x: int = -1, y: int = -1) -> None:
     """模拟鼠标或键盘按键的按下操作（不释放）。
@@ -91,8 +108,8 @@ def down(button: str, x: int = -1, y: int = -1) -> None:
     if is_mouse:
         _mouse_event(actual, _DOWN, x, y)
     else:
-        keyboard.press(actual)
-
+        with _safe_keyboard():
+            keyboard.press(actual)
 def up(button: str, x: int = -1, y: int = -1) -> None:
     """模拟鼠标或键盘按键的释放操作。
 
@@ -109,7 +126,8 @@ def up(button: str, x: int = -1, y: int = -1) -> None:
     if is_mouse:
         _mouse_event(actual, _UP, x, y)
     else:
-        keyboard.release(actual)
+        with _safe_keyboard():
+            keyboard.release(actual)
 
 def move(x_offset: int, y_offset: int) -> None:
     """相对当前鼠标位置移动鼠标。
