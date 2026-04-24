@@ -197,6 +197,14 @@ class PythonCodeEditor(QCodeEditor):
             self._unindentSelection()
             return
 
+        # Esc 取消选区
+        if key == Qt.Key_Escape:
+            cursor = self.textCursor()
+            if cursor.hasSelection():
+                cursor.clearSelection()
+                self.setTextCursor(cursor)
+            return
+
         # Ctrl+/ 切换注释：对当前行或选中行添加/移除 # 注释
         if key == Qt.Key_Slash and e.modifiers() == Qt.ControlModifier:
             self._toggleComment()
