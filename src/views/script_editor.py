@@ -188,6 +188,11 @@ class PythonCodeEditor(QCodeEditor):
                     indentStr = "\t" * (tabCounts + 1)
                 self.insertPlainText("\n" + indentStr)
                 return
+        # Ctrl+/ 切换注释：对当前行或选中行添加/移除 # 注释
+        if key == Qt.Key_Slash and e.modifiers() == Qt.ControlModifier:
+            self._toggleComment()
+            return
+
         # Backspace 智能退格：光标前全是空格且数量为 tabReplaceSize 的倍数时，一次删除一个缩进单位
         if key == Qt.Key_Backspace and e.modifiers() == Qt.NoModifier and self._replaceTab:
             cursor = self.textCursor()
@@ -209,6 +214,118 @@ class PythonCodeEditor(QCodeEditor):
 
         # 其他情况交给父类处理
         super().keyPressEvent(e, **kwargs)
+
+    @staticmethod
+    def _commentPrefixLen(stripped: str) -> int:
+        """返回行首注释前缀的长度（0 表示非注释行）"""
+        if stripped.startswith("# "):
+            return 2
+        if stripped.startswith("#"):
+            return 1
+        return 0
+
+    def _toggleComment(self):
+        """Ctrl+/ 切换注释：对当前行或选中行添加/移除 # 注释
+
+        逻辑与 VSCode 一致：
+        - 添加注释：在所有操作行的最小缩进处统一插入 "# "，使 # 对齐
+        - 取消注释：在每行缩进后查找并移除 "# " 或 "#"
+        - 空行不参与决策也不被修改，特例：全为空行时在行首添加 "# "
+        - 无选区时切换当前行，有选区时统一切换所选行
+        - 整个操作可用一次 Ctrl+Z 撤销
+        """
+        COMMENT_PREFIX = "# "
+        cursor = self.textCursor()
+        doc = self.document()
+
+        # 确定操作的行范围
+        hasSelection = cursor.hasSelection()
+        if hasSelection:
+            startBlock = doc.findBlock(cursor.selectionStart())
+            endBlock = doc.findBlock(cursor.selectionEnd())
+        else:
+            startBlock = cursor.block()
+            endBlock = cursor.block()
+
+        # 收集所有待操作的行信息（修改前获取）
+        # lineInfos: [(block, indentLen, commentLen, strippedText)]
+        lineInfos = []
+        block = startBlock
+        while block.isValid():
+            text = block.text()
+            stripped = text.lstrip()
+            indentLen = len(text) - len(stripped) if stripped else 0
+            commentLen = self._commentPrefixLen(stripped)
+            lineInfos.append((block, indentLen, commentLen, stripped))
+            if block == endBlock:
+                break
+            block = block.next()
+
+        # 判断是添加还是移除注释
+        allEmpty = all(not s for _, _, _, s in lineInfos)
+        hasUncommented = any(cl == 0 for _, _, cl, s in lineInfos if s)
+        shouldComment = hasUncommented or allEmpty
+
+        # 添加注释时，计算所有非空行的最小缩进
+        minIndent = min((i for _, i, _, s in lineInfos if s), default=0)
+
+        # 第一遍：基于编辑前位置计算偏移量，并记录光标方向
+        selStart = cursor.selectionStart()
+        selEnd = cursor.selectionEnd()
+        cursorAtTail = cursor.position() == selEnd
+        deltaStart = 0
+        deltaEnd = 0
+        prefixLen = len(COMMENT_PREFIX)
+
+        for b, indentLen, commentLen, stripped in lineInfos:
+            if not stripped and not allEmpty:
+                continue
+            if shouldComment:
+                pos = b.position() + minIndent
+                if selStart > pos:
+                    deltaStart += prefixLen
+                if selEnd > pos:
+                    deltaEnd += prefixLen
+            else:
+                if commentLen > 0:
+                    pos = b.position() + indentLen
+                    if selStart > pos + commentLen:
+                        deltaStart -= commentLen
+                    elif selStart > pos:
+                        deltaStart = pos - selStart
+                    if selEnd > pos + commentLen:
+                        deltaEnd -= commentLen
+                    elif selEnd > pos:
+                        deltaEnd = pos - selEnd
+
+        # 第二遍：执行编辑（beginEditBlock 内 block.position() 保持原值）
+        cursor.beginEditBlock()
+        for b, indentLen, commentLen, stripped in lineInfos:
+            if not stripped and not allEmpty:
+                continue
+            if shouldComment:
+                pos = b.position() + minIndent
+                cursor.setPosition(pos)
+                cursor.insertText(COMMENT_PREFIX)
+            else:
+                if commentLen > 0:
+                    pos = b.position() + indentLen
+                    cursor.setPosition(pos)
+                    cursor.setPosition(pos + commentLen, QTextCursor.KeepAnchor)
+                    cursor.removeSelectedText()
+        cursor.endEditBlock()
+
+        # 恢复选区（保持光标在头/尾的方向不变）
+        if hasSelection:
+            newStart = max(selStart + deltaStart, 0)
+            newEnd = max(selEnd + deltaEnd, 0)
+            if cursorAtTail:
+                cursor.setPosition(newStart)
+                cursor.setPosition(newEnd, QTextCursor.KeepAnchor)
+            else:
+                cursor.setPosition(newEnd)
+                cursor.setPosition(newStart, QTextCursor.KeepAnchor)
+            self.setTextCursor(cursor)
 
     def _proceedCompleterEnd(self, e):
         """重写补全触发逻辑：输入 1 个字符即开始补全（父类需要 2 个）"""
