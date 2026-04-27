@@ -9,6 +9,7 @@ import watchdog.observers
 
 from core import api
 from core import common
+from core import event_listener
 from core import logger
 from core import vision_backend
 
@@ -80,6 +81,8 @@ class ScriptObserver(watchdog.events.FileSystemEventHandler):
 
         instance.reload()
         logger.script.info(f'File "{path}" has been modified, reload!')
+
+        event_listener.restart()
 
     def start(self):
         self.observer.start()

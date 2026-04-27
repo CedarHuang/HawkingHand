@@ -23,8 +23,7 @@ class EventManager(list[Event]):
         with open(common.event_config_path(), 'w', encoding='utf-8') as file:
             dicts = [event.to_dict() for event in self]
             json.dump(dicts, file, indent=4, ensure_ascii=False)
-        event_listener.stop()
-        event_listener.start()
+        event_listener.restart()
 
     def insert(self, index, event):
         super().insert(index, event)

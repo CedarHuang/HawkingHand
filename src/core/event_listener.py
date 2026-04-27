@@ -81,6 +81,10 @@ def stop():
     keyboard.unhook_all()
     foreground_listener.clear_event_callback_list()
 
+def restart():
+    stop()
+    start()
+
 def callback_factory(event):
     parse_scope(event)
     match event.type:
