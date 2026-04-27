@@ -27,27 +27,39 @@ def _ensure_keyboard_listening():
             logger.app.warning('keyboard listening_thread is dead, forcing recovery')
             listener.listening = False
 
-def _wrap_trigger_on_release(callback, keys):
-    # 热键按下时挂起，所有键都释放后触发。
-    # 为每个键注册持久 hook，按下热键时将所有键加入待释放集合，
-    # 逐个释放时移除，集合清空时触发回调。
-    remaining = set()
+def _wrap_hotkey(callback, hotkey, trigger_on_release):
+    # 统一管理热键触发时机，解决两个问题：
+    # 1. keyboard 库长按热键时会持续触发回调，需要限制为只触发一次
+    # 2. keyboard 库的 trigger_on_release 参数存在 bug
+    #    nonblocking hotkeys 在 KEY_UP 时 _pressed_events 已被清空导致匹配失败
+    #
+    # 为每个键注册持久 hook 追踪释放状态：
+    # - trigger_on_release=False：按下时立即触发回调
+    # - trigger_on_release=True：任意键释放时触发回调
+    keys = [k.strip() for k in hotkey.split('+')]
+    fired = False
 
-    def make_on_key(key):
-        def on_key(event):
-            if event.event_type == keyboard.KEY_UP and key in remaining:
-                remaining.discard(key)
-                if not remaining:
+    def on_key_release(event):
+        nonlocal fired
+        if event.event_type == keyboard.KEY_UP:
+            # 任意键释放后重置标志位
+            if fired and not all(keyboard.is_pressed(k) for k in keys):
+                if trigger_on_release:
                     callback()
-        return on_key
+                fired = False
 
     for key in keys:
-        keyboard.hook_key(key, make_on_key(key))
+        keyboard.hook_key(key, on_key_release)
 
-    def on_press():
-        remaining.update(keys)
+    def wrapped_callback():
+        nonlocal fired
+        if fired:
+            return
+        fired = True
+        if not trigger_on_release:
+            callback()
 
-    return on_press
+    return wrapped_callback
 
 def start():
     # keyboard 库的 listening_thread 因 GetMessage 异常退出后 listening 标志仍为 True，
@@ -61,13 +73,7 @@ def start():
             continue
 
         callback = callback_factory(event)
-
-        if event.trigger_on_release:
-            # keyboard 库的 trigger_on_release 参数存在 bug
-            # nonblocking hotkeys 在 KEY_UP 时 _pressed_events 已被清空导致 hotkey 匹配失败
-            # 因此需要自行实现一个 workaround
-            keys = [k.strip() for k in event.hotkey.split('+')]
-            callback = _wrap_trigger_on_release(callback, keys)
+        callback = _wrap_hotkey(callback, event.hotkey, event.trigger_on_release)
 
         keyboard.add_hotkey(event.hotkey, callback)
 
