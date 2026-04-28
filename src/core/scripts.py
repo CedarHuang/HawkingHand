@@ -212,7 +212,8 @@ class Scripts:
             try:
                 exec(script_code.code, script_context)
             except api.ScriptExit as e:
-                logger.script.info(f'Script <{script_name}> terminated: {e}')
+                if e.code != 0:
+                    logger.script.info(f'Script <{script_name}> terminated: {e}')
             except Exception:
                 logger.script.error(f'Runtime error in script <{script_name}>:', exc_info=True)
             finally:
