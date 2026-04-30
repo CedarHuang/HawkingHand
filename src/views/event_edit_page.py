@@ -639,6 +639,7 @@ class EventEditPage(QWidget):
         match paramDef.type:
             case ParamType.CHOICE: return self._createChoiceWidget(paramDef)
             case ParamType.COORD:  return self._createCoordWidget(paramDef)
+            case ParamType.HOTKEY: return self._createHotkeyWidget(paramDef)
             case ParamType.BOOL:   return self._createBoolWidget(paramDef)
             case ParamType.INT:    return self._createIntWidget(paramDef)
             case ParamType.FLOAT:  return self._createFloatWidget(paramDef)
@@ -734,6 +735,16 @@ class EventEditPage(QWidget):
         container._spinX = spinX
         container._spinY = spinY
         return container
+
+    def _createHotkeyWidget(self, paramDef: ParamDef) -> QLineEdit:
+        """创建 hotkey 类型热键录入控件"""
+        lineEdit = QLineEdit()
+        lineEdit.setMinimumHeight(32)
+        lineEdit.setText(str(paramDef.default))
+        lineEdit.textChanged.connect(self._markDirty)
+        # HotkeyRecorder 由 lineEdit 持有（parent），负责拦截点击/按键、录制组合键
+        HotkeyRecorder(lineEdit)
+        return lineEdit
 
     def _createBoolWidget(self, paramDef: ParamDef) -> ToggleSwitch:
         """创建 bool 类型开关"""

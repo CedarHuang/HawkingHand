@@ -254,12 +254,12 @@ class ExtractContext(ScriptContext):
 
     @staticmethod
     def _create_extract_params(param_defs: list[ParamDef]):
-        def _extract_params(name, default, /, *, label=None, description=None, options=None):
+        def _extract_params(name, default, /, *, label=None, description=None, options=None, type=None):
             # 参数不足或 default=None 时忽略该调用
             if default is None:
                 return default
 
-            param_type = ParamType.infer_from(default, options)
+            param_type = ParamType(type) if type else ParamType.infer_from(default, options)
 
             # 处理 default 不在 options 中的情况
             effective_default = api._effective_default(default, options)

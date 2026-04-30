@@ -359,7 +359,7 @@ def _create_context(event: models.Event):
         raise ScriptExit(f"Script exited with code {code}", code)
 
     @register()
-    def params(name, default, /, *, label=None, description=None, options=None):
+    def params(name, default, /, *, label=None, description=None, options=None, type=None):
         """声明脚本可配置参数并同时获取参数值。
 
         在脚本中调用此函数声明一个可配置参数，系统会根据参数声明在 UI 中渲染对应的输入控件。
@@ -367,19 +367,20 @@ def _create_context(event: models.Event):
 
         Args:
             name (str): 参数标识符，用于在 UI 中显示和运行时查找配置值。
-            default (int | float | str | bool): 参数默认值，同时用于推断参数类型（必填）。
+            default (int | float | str | bool | list | tuple): 参数默认值，同时用于推断参数类型（必填）。
             label (str | dict[str, str] | None): 显示标签，支持单语言字符串或多语言映射。默认为 None（使用 name）。
             description (str | dict[str, str] | None): 描述文本，支持单语言字符串或多语言映射。默认为 None。
             options (list | dict | None): 选项列表，用于 choice 类型参数。默认为 None。
+            type (str | None): 显式指定参数类型，覆盖自动推断。如 type='hotkey'。默认为 None。
 
         Returns:
-            int | float | str | bool: 参数的用户配置值，若未配置则返回 default 值。
+            int | float | str | bool | list: 参数的用户配置值，若未配置则返回 default 值。
         """
         script_args = event.params.script_args if event else {}
         if name in script_args:
             value = script_args[name]
             # 类型转换：确保返回值类型与 default 一致
-            param_type = models.ParamType.infer_from(default, options)
+            param_type = models.ParamType(type) if type else models.ParamType.infer_from(default, options)
             if param_type == models.ParamType.CHOICE:
                 # choice 类型：返回 options 中的键/元素值
                 if value in options:
@@ -411,6 +412,8 @@ def _create_context(event: models.Event):
                     return float(value)
                 except (ValueError, TypeError):
                     return default
+            elif param_type == models.ParamType.HOTKEY:
+                return str(value) if value else default
             elif param_type == models.ParamType.STR:
                 try:
                     return str(value)

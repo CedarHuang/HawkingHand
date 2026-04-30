@@ -8,6 +8,7 @@ class ParamType(StrEnum):
     CHOICE = 'choice'
     COORD = 'coord'
     FLOAT = 'float'
+    HOTKEY = 'hotkey'
     INT = 'int'
     STR = 'str'
 
