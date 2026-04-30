@@ -158,6 +158,9 @@ class EventController:
 
         if event.type == "Script":
             formData["script"] = event.target or ""
+            # 传递脚本参数值
+            if isinstance(event.params, ScriptParams) and event.params.script_args:
+                formData["script_args"] = event.params.script_args
 
         self._eventEditPage.setFormData(formData)
         self._contentStack.setCurrentIndex(PageIndex.EVENT_EDIT)
@@ -186,7 +189,7 @@ class EventController:
         # 根据类型构建对应的 params
         if eventType == "Script":
             target = data.get("script", "")
-            params = ScriptParams()
+            params = ScriptParams(script_args=data.get("script_args", {}))
         elif eventType == "Multi":
             target = data.get("target", MOUSE_LEFT)
             params = MultiParams(

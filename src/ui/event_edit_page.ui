@@ -622,6 +622,30 @@
            </widget>
           </item>
           <item>
+           <widget class="QFrame" name="scriptParamsContainer">
+            <property name="visible">
+             <bool>false</bool>
+            </property>
+            <layout class="QVBoxLayout" name="scriptParamsLayout">
+             <property name="spacing">
+              <number>12</number>
+             </property>
+             <property name="leftMargin">
+              <number>0</number>
+             </property>
+             <property name="topMargin">
+              <number>0</number>
+             </property>
+             <property name="rightMargin">
+              <number>0</number>
+             </property>
+             <property name="bottomMargin">
+              <number>0</number>
+             </property>
+            </layout>
+           </widget>
+          </item>
+          <item>
            <widget class="QFrame" name="positionRow">
             <layout class="QHBoxLayout" name="positionRowLayout">
              <property name="spacing">

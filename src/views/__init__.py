@@ -1,5 +1,8 @@
-from PySide6.QtCore import QObject, QEvent, Qt, QPropertyAnimation, QEasingCurve, QTimer
-from PySide6.QtWidgets import QWidget, QSpinBox, QComboBox, QGraphicsOpacityEffect
+import ctypes
+import sys
+from PySide6.QtCore import QObject, QEvent, Qt, QPropertyAnimation, QEasingCurve, QTimer, QSize
+from PySide6.QtGui import QFontMetrics
+from PySide6.QtWidgets import QWidget, QSpinBox, QDoubleSpinBox, QComboBox, QGraphicsOpacityEffect, QApplication
 
 
 def _polishWidget(widget: QWidget):
@@ -144,21 +147,127 @@ class _ComboPopupFadeFilter(QObject):
         origHide()
 
 
+class _ToolTipShadowFilter(QObject):
+    """QToolTip 全局事件过滤器：移除 Windows 原生阴影 + 修复内边距。
+
+    Windows 下 QToolTip 的投影阴影由窗口类样式 CS_DROPSHADOW 产生，
+    QSS 无法控制，必须通过 Win32 API SetClassLongPtrW 移除。
+
+    Qt 对 QTipLabel 的 QSS padding 映射存在 bug：padding 被映射到
+    QLabel.margin（单一值，四个方向相同），垂直 padding 基本丢失，
+    且 frameWidth 膨胀到 padding+border 之和。因此 QSS 中不应设置
+    padding，改由代码精确控制。
+
+    QLabel.sizeHint 公式（margin=0, indent=0）：
+      width  = textWidth + cm.left + cm.right
+      height = textHeight + cm.top + cm.bottom + 1  (1px leading)
+    border 画在 contentsMargins 区域内（不额外占空间）。
+    但 leading 会使 CR 高度比 textHeight 多 1px，导致文字垂直偏移
+    （AlignVCenter 居中时上方多出 0.5px 空白），上下视觉不对称。
+    解决方案：用 setFixedSize 强制 CR 高度 = textHeight，消除偏移；
+    此时 cm=(7, 3, 7, 3) 即可实现视觉上 L=7 R=7 T=3+1(border)=4
+    B=3+1(border)=4 的对称效果（含 border 视觉间距 4:8）。
+
+    必须同时监听 Show 和 StyleChange：
+    - Show：首次展示 / hide后重新展示
+    - StyleChange：直接切换 tooltip 文本时，Qt 会重新应用样式，
+      重置 contentsMargins，但不触发 Show 事件
+    """
+
+    _CS_DROPSHADOW = 0x00020000
+    _GCLP_STYLE = -26  # GetClassLongPtrW index
+    _shadowRemoved = False  # 类级别只需移除一次
+    _filterRegistered = False  # 事件过滤器全局注册标记
+
+    # 目标 contentsMargins：L=7 T=3 R=7 B=3
+    # CR 高度 = textHeight（消除垂直偏移），视觉上 L=7 R=7 T=3+1(border)=4
+    # B=3+1(border)=4，即含 border 视觉间距 4:8
+    _CM = (7, 3, 7, 3)
+
+    def eventFilter(self, obj: QObject, event: QEvent) -> bool:
+        if not isinstance(obj, QWidget):
+            return False
+
+        et = event.type()
+        if et not in (QEvent.Type.Show, QEvent.Type.StyleChange):
+            return False
+
+        className = obj.metaObject().className()
+        if className not in ("QTipLabel", "QToolTip"):
+            return False
+
+        # ---- 修复内边距 ----
+        cl, ct, cr, cb = self._CM
+
+        # 仅在值实际需要改变时才设置（避免触发 StyleChange 无限递归）
+        if obj.margin() != 0:
+            obj.setMargin(0)
+        if obj.indent() != 0:
+            obj.setIndent(0)
+
+        cm = obj.contentsMargins()
+        if (cm.left(), cm.top(), cm.right(), cm.bottom()) != (cl, ct, cr, cb):
+            obj.setContentsMargins(cl, ct, cr, cb)
+
+        # 精确设置窗口尺寸：用 setFixedSize 锁定，防止 Qt 内部布局自动调整
+        #   width  = textWidth + cm.left + cm.right
+        #   height = textHeight + cm.top + cm.bottom  (不加 leading，消除垂直偏移)
+        fm = QFontMetrics(obj.font())
+        text = obj.text()
+        if "\n" in text:
+            # 多行文本：使用 boundingRect 计算换行后的实际尺寸
+            br = fm.boundingRect(0, 0, 0, 0, Qt.TextFlag.TextExpandTabs, text)
+            target_w = br.width() + cl + cr
+            target_h = br.height() + ct + cb
+        else:
+            target_w = fm.horizontalAdvance(text) + cl + cr
+            target_h = fm.height() + ct + cb
+        target_size = QSize(target_w, target_h)
+        if obj.size() != target_size:
+            obj.setFixedSize(target_size)
+
+        # 移除 Windows 原生阴影（类级别，只需一次）
+        if et == QEvent.Type.Show and not self._shadowRemoved and sys.platform == "win32":
+            try:
+                hwnd = int(obj.winId())
+                gcl = ctypes.windll.user32.GetClassLongPtrW
+                scl = ctypes.windll.user32.SetClassLongPtrW
+                classStyle = gcl(hwnd, self._GCLP_STYLE)
+                if classStyle & self._CS_DROPSHADOW:
+                    scl(hwnd, self._GCLP_STYLE,
+                        classStyle & ~self._CS_DROPSHADOW)
+                    _ToolTipShadowFilter._shadowRemoved = True
+            except Exception:
+                pass
+
+        return False
+
+
 # 模块级单例
 _noScrollFilter = _NoScrollFilter()
 _comboFadeFilter = _ComboPopupFadeFilter()
+_toolTipShadowFilter = _ToolTipShadowFilter()
 
 
 def polishInputWidgets(parent: QWidget):
-    """统一修饰 parent 下的输入控件（QSpinBox / QComboBox）
+    """统一修饰 parent 下的输入控件（QSpinBox / QDoubleSpinBox / QComboBox）
 
     1. 安装滚轮过滤器：控件未聚焦时忽略滚轮，避免意外修改数值。
     2. 为 ComboBox 弹层安装淡入淡出动画 + 阴影移除。
+    3. 为 QToolTip 移除 Qt 自动添加的阴影效果（仅注册一次）。
     """
 
-    for child in parent.findChildren(QSpinBox) + parent.findChildren(QComboBox):
+    for child in (parent.findChildren(QSpinBox)
+                  + parent.findChildren(QDoubleSpinBox)
+                  + parent.findChildren(QComboBox)):
         child.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         child.installEventFilter(_noScrollFilter)
 
     for combo in parent.findChildren(QComboBox):
         _comboFadeFilter.installOn(combo)
+
+    # 注册 QToolTip 阴影移除过滤器（仅注册一次）
+    app = QApplication.instance()
+    if app is not None and not _ToolTipShadowFilter._filterRegistered:
+        _ToolTipShadowFilter._filterRegistered = True
+        app.installEventFilter(_toolTipShadowFilter)

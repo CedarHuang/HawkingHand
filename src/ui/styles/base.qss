@@ -322,12 +322,20 @@ QLineEdit#scopeInput {
     font-size: 13px;
 }
 
-/* 下拉选择框 */
-QFrame[role="formGroup"] QComboBox {
+/* 下拉选择框 & 数值/文本输入框 */
+QFrame[role="formGroup"] QComboBox,
+QFrame[role="formGroup"] QSpinBox,
+QFrame[role="formGroup"] QDoubleSpinBox,
+QFrame[role="formGroup"] QLineEdit {
     border-radius: 6px;
     padding: 4px 10px;
     font-size: 13px;
     min-height: 24px;
+}
+
+QFrame[role="formGroup"] QSpinBox,
+QFrame[role="formGroup"] QDoubleSpinBox {
+    padding: 4px 8px;
 }
 
 QFrame[role="formGroup"] QComboBox::drop-down {
@@ -356,42 +364,49 @@ QComboBox QAbstractItemView {
     outline: none;
 }
 
-/* 数值输入框 */
-QFrame#paramsGroup QSpinBox {
-    border-radius: 6px;
-    padding: 4px 8px;
-    font-size: 13px;
-    min-height: 24px;
-}
-
 QSpinBox::up-button,
-QSpinBox::down-button {
+QSpinBox::down-button,
+QDoubleSpinBox::up-button,
+QDoubleSpinBox::down-button {
     width: 18px;
     border: none;
 }
 
-QSpinBox::up-button {
+QSpinBox::up-button,
+QDoubleSpinBox::up-button {
     border-top-right-radius: 6px;
 }
 
-QSpinBox::down-button {
+QSpinBox::down-button,
+QDoubleSpinBox::down-button {
     border-bottom-right-radius: 6px;
 }
 
-QSpinBox::up-arrow {
+QSpinBox::up-arrow,
+QDoubleSpinBox::up-arrow {
     width: 10px;
     height: 6px;
 }
 
-QSpinBox::down-arrow {
+QSpinBox::down-arrow,
+QDoubleSpinBox::down-arrow {
     width: 10px;
     height: 6px;
 }
 
-/* 分组内子行容器统一透明 */
+/* 分组内子行容器统一透明
+ * 注意：paramsGroup > scriptParamsContainer > paramRow，
+ * 因此 QFrame#paramsGroup > QFrame 只能命中 scriptParamsContainer（直接子元素），
+ * paramRow 由下一条规则覆盖。*/
 QFrame#scriptRow,
 QFrame#conditionGroup > QFrame,
 QFrame#paramsGroup > QFrame {
+    border: none;
+    background: transparent;
+}
+
+/* 脚本参数行动态创建的 QFrame 也需要透明背景 */
+QFrame#scriptParamsContainer > QFrame {
     border: none;
     background: transparent;
 }
@@ -650,9 +665,8 @@ QScrollBar::sub-page:horizontal {
  * ============================================================ */
 
 QToolTip {
-    font-size: 12px;
+    font-size: 13px;
     border-radius: 4px;
-    padding: 4px 8px;
 }
 
 /* ============================================================

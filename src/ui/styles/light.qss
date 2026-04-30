@@ -357,20 +357,35 @@ QLineEdit#hotkeyInput:read-only {
     background-color: #F5F5F6;
 }
 
-/* 下拉选择框 */
-QFrame[role="formGroup"] QComboBox {
+/* 下拉选择框 & 数值/文本输入框 */
+QFrame[role="formGroup"] QComboBox,
+QFrame[role="formGroup"] QSpinBox,
+QFrame[role="formGroup"] QDoubleSpinBox,
+QFrame[role="formGroup"] QLineEdit {
     background-color: #FFFFFF;
     color: #383A42;
     border: 1px solid #D0D1D4;
 }
-QFrame[role="formGroup"] QComboBox:hover {
+QFrame[role="formGroup"] QComboBox:hover,
+QFrame[role="formGroup"] QSpinBox:hover,
+QFrame[role="formGroup"] QDoubleSpinBox:hover,
+QFrame[role="formGroup"] QLineEdit:hover {
     border: 1px solid #B0B1B4;
 }
-QFrame[role="formGroup"] QComboBox:focus {
+QFrame[role="formGroup"] QComboBox:focus,
+QFrame[role="formGroup"] QSpinBox:focus,
+QFrame[role="formGroup"] QDoubleSpinBox:focus,
+QFrame[role="formGroup"] QLineEdit:focus {
     border: 1px solid #4078F2;
 }
 QFrame[role="formGroup"] QComboBox:on {
     border: 1px solid #4078F2;
+}
+QFrame[role="formGroup"] QSpinBox,
+QFrame[role="formGroup"] QDoubleSpinBox,
+QFrame[role="formGroup"] QLineEdit {
+    selection-background-color: #B4D5FE;
+    selection-color: #383A42;
 }
 
 QFrame[role="formGroup"] QComboBox::down-arrow {
@@ -390,40 +405,34 @@ QComboBox QAbstractItemView {
     selection-color: #4078F2;
 }
 
-/* 数值输入框 */
-QFrame#paramsGroup QSpinBox {
-    background-color: #FFFFFF;
-    color: #383A42;
-    border: 1px solid #D0D1D4;
-    selection-background-color: #B4D5FE;
-    selection-color: #383A42;
-}
-QFrame#paramsGroup QSpinBox:focus {
-    border: 1px solid #4078F2;
-}
-
-QSpinBox::up-button {
+QSpinBox::up-button,
+QDoubleSpinBox::up-button {
     background-color: #F0F0F2;
 }
-QSpinBox::up-button:hover {
+QSpinBox::up-button:hover,
+QDoubleSpinBox::up-button:hover {
     background-color: #E0E0E2;
 }
-QSpinBox::down-button {
+QSpinBox::down-button,
+QDoubleSpinBox::down-button {
     background-color: #F0F0F2;
 }
-QSpinBox::down-button:hover {
+QSpinBox::down-button:hover,
+QDoubleSpinBox::down-button:hover {
     background-color: #E0E0E2;
 }
 
-QSpinBox::up-arrow {
+QSpinBox::up-arrow,
+QDoubleSpinBox::up-arrow {
     image: url(:/icons/arrow-up-light.svg);
 }
-QSpinBox::down-arrow {
+QSpinBox::down-arrow,
+QDoubleSpinBox::down-arrow {
     image: url(:/icons/arrow-down-light.svg);
 }
 
-/* 编辑页触发方式开关（ToggleSwitch 自绘） */
-ToggleSwitch#triggerOnReleaseCheck {
+/* 编辑页 ToggleSwitch（触发方式开关 + 脚本参数开关） */
+EventEditPage ToggleSwitch {
     qproperty-trackColorOff: #D0D1D4;
     qproperty-trackColorOn: #4078F2;
     qproperty-thumbColor: #FFFFFF;
@@ -679,7 +688,7 @@ QScrollBar::handle:horizontal:pressed {
  * ============================================================ */
 
 QToolTip {
-    background-color: #FFFFFF;
+    background-color: #F6F6F8;
     color: #383A42;
     border: 1px solid #D0D1D4;
 }

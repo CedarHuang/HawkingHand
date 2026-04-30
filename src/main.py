@@ -60,6 +60,8 @@ def main():
 
     app = QApplication(sys.argv)
     app.setEffectEnabled(Qt.UIEffect.UI_AnimateCombo, False)
+    app.setEffectEnabled(Qt.UIEffect.UI_AnimateTooltip, False)
+    app.setEffectEnabled(Qt.UIEffect.UI_FadeTooltip, True)
 
     # 加载翻译
     _translator = installTranslator(app, configSettings.language)

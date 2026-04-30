@@ -7,6 +7,7 @@ from core import common
 from core import foreground_listener
 from core import input_backend
 from core import logger
+from core import models
 from core import vision_backend
 
 class ScriptExit(Exception):
@@ -22,6 +23,23 @@ class ScriptExit(Exception):
     def __init__(self, message="Script terminated.", code=0):
         super().__init__(message)
         self.code = code
+
+
+def _effective_default(default, options):
+    """当 default 不在 options 中时，返回 options 的第一个元素作为有效默认值。
+
+    注意：对 dict 类型 options，``in`` 检查的是 key 而非 value，
+    ``next(iter(options))`` 返回的也是第一个 key（即 CHOICE 的实际值）。
+
+    :meta private: 内部使用。
+    """
+    if options is not None and default not in options:
+        try:
+            return next(iter(options))
+        except StopIteration:
+            pass
+    return default
+
 
 def _create_init(_=None):
     """为 Script 脚本环境生成init。
@@ -53,7 +71,7 @@ _script_cache = {}
 _global_cache_lock = threading.Lock()
 _script_cache_lock = threading.Lock()
 
-def _create_context(event):
+def _create_context(event: models.Event):
     """为 Script 脚本环境生成API。
 
     :meta private: 内部使用。
@@ -339,6 +357,61 @@ def _create_context(event):
             ScriptExit: 始终抛出此异常以终止脚本。
         """
         raise ScriptExit(f"Script exited with code {code}", code)
+
+    @register()
+    def params(name, default, /, *, label=None, description=None, options=None):
+        """声明脚本可配置参数并同时获取参数值。
+
+        在脚本中调用此函数声明一个可配置参数，系统会根据参数声明在 UI 中渲染对应的输入控件。
+        脚本执行时，返回该参数的用户配置值（若未配置则返回默认值）。
+
+        Args:
+            name (str): 参数标识符，用于在 UI 中显示和运行时查找配置值。
+            default (int | float | str | bool): 参数默认值，同时用于推断参数类型（必填）。
+            label (str | dict[str, str] | None): 显示标签，支持单语言字符串或多语言映射。默认为 None（使用 name）。
+            description (str | dict[str, str] | None): 描述文本，支持单语言字符串或多语言映射。默认为 None。
+            options (list | dict | None): 选项列表，用于 choice 类型参数。默认为 None。
+
+        Returns:
+            int | float | str | bool: 参数的用户配置值，若未配置则返回 default 值。
+        """
+        script_args = event.params.script_args if event else {}
+        if name in script_args:
+            value = script_args[name]
+            # 类型转换：确保返回值类型与 default 一致
+            param_type = models.ParamType.infer_from(default, options)
+            if param_type == models.ParamType.CHOICE:
+                # choice 类型：返回 options 中的键/元素值
+                if value in options:
+                    return value
+                # 值不在 options 中，回退到有效默认值
+                return _effective_default(default, options)
+            elif param_type == models.ParamType.BOOL:
+                if isinstance(value, bool):
+                    return value
+                if isinstance(value, int):
+                    return bool(value)
+                if isinstance(value, str):
+                    return value.lower() in ('true', 'yes', '1')
+                return default
+            elif param_type == models.ParamType.INT:
+                try:
+                    return int(value)
+                except (ValueError, TypeError):
+                    return default
+            elif param_type == models.ParamType.FLOAT:
+                try:
+                    return float(value)
+                except (ValueError, TypeError):
+                    return default
+            elif param_type == models.ParamType.STR:
+                try:
+                    return str(value)
+                except (ValueError, TypeError):
+                    return default
+            return value
+        # default 不在 options 中时返回 options 第一个元素
+        return _effective_default(default, options)
 
     @register()
     def event_hotkey():

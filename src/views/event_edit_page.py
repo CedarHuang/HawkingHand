@@ -8,16 +8,21 @@
 import os
 
 import keyboard
-from PySide6.QtCore import Signal, QEvent, QObject, QCoreApplication
+from PySide6.QtCore import Signal, QEvent, QObject, QCoreApplication, QLocale
 from PySide6.QtWidgets import (
     QWidget, QButtonGroup, QMessageBox,
+    QSizePolicy, QSpacerItem,
+    QSpinBox, QDoubleSpinBox, QLineEdit, QComboBox,
+    QLabel, QHBoxLayout, QFrame,
 )
-
 from core import common
 from core import event_listener
 from core.input_backend import MOUSE_LEFT, MOUSE_RIGHT
+from core.models import ParamDef, ParamType
+from core.scripts import ScriptCode
 from ui.generated.ui_event_edit_page import Ui_EventEditPage
 from views import _polishWidget, polishInputWidgets
+from views.toggle_switch import ToggleSwitch
 
 
 def prettifyHotkey(hotkey: str) -> str:
@@ -32,6 +37,40 @@ def prettifyHotkey(hotkey: str) -> str:
         return hotkey
     normalized = keyboard.get_hotkey_name(hotkey.split("+"))
     return "+".join(part.strip().capitalize() for part in normalized.split("+"))
+
+
+def _getLocalizedText(text: str | dict[str, str] | None, fallback: str = "") -> str:
+    """从多语言文本中获取当前语言的文本。
+
+    Args:
+        text: 单语言文本(str)或多语言映射(dict[str, str])或 None
+        fallback: 当 text 为 None 或空 dict 时的回退文本
+
+    Returns:
+        当前语言的文本
+    """
+    match text:
+        case None:
+            return fallback
+        case str():
+            return text
+        case dict():
+            if not text:
+                return fallback
+            # 获取当前语言代码
+            locale = QLocale()
+            langCode = locale.name()  # 如 "zh_CN", "en_US"
+            if langCode in text:
+                return text[langCode]
+            # 尝试仅语言部分匹配（如 "zh" 匹配 "zh_CN"）
+            langPrefix = langCode.split("_")[0]
+            for key, value in text.items():
+                if key.split("_")[0] == langPrefix:
+                    return value
+            # 回退到第一个条目
+            return next(iter(text.values()))
+        case _:
+            return fallback
 
 
 class HotkeyRecorder(QObject):
@@ -173,17 +212,24 @@ class EventEditPage(QWidget):
         self.ui.scopeInput.textChanged.connect(self._markDirty)
         self.ui.triggerOnReleaseCheck.toggled.connect(self._markDirty)
         self.ui.buttonCombo.currentTextChanged.connect(self._markDirty)
-        self.ui.scriptCombo.currentTextChanged.connect(self._markDirty)
         self.ui.positionX.valueChanged.connect(self._markDirty)
         self.ui.positionY.valueChanged.connect(self._markDirty)
         self.ui.intervalInput.valueChanged.connect(self._markDirty)
         self.ui.clicksInput.valueChanged.connect(self._markDirty)
+
+        # ---- 脚本参数动态渲染 ----
+        self._currentParamDefs: list[ParamDef] = []  # 当前脚本的参数声明列表
+        self._paramWidgets: dict[str, QWidget] = {}  # 参数名 → 控件的映射
+        self._scriptArgsToRestore: dict | None = None  # 待还原的脚本参数值
 
         # ---- 为预设鼠标按钮选项设置内部值（不受翻译影响） ----
         self._initButtonComboData()
 
         # ---- 修饰输入控件（滚轮过滤 + 弹出圆角修复）----
         polishInputWidgets(self)
+
+        # ---- 脚本选择变更时动态渲染参数 ----
+        self.ui.scriptCombo.currentIndexChanged.connect(self._onScriptChanged)
 
         # ---- 初始状态：Click 类型 ----
         self._applyType("Click")
@@ -217,6 +263,10 @@ class EventEditPage(QWidget):
 
         # 清除错误提示样式
         self._clearErrors()
+
+        # 清除脚本参数状态
+        self._clearScriptParams()
+        self._scriptArgsToRestore = None
 
         # 应用类型联动
         self._applyType("Click")
@@ -266,9 +316,19 @@ class EventEditPage(QWidget):
         # 如果是脚本类型，设置脚本选择
         if eventType == "Script":
             scriptName = data.get("script", "")
+            # 存储 script_args，在 _refreshScriptParams 中还原
+            self._scriptArgsToRestore = data.get("script_args")
             idx = self.ui.scriptCombo.findText(scriptName)
             if idx >= 0:
+                # 阻断信号：统一由下方 _refreshScriptParams 显式触发参数提取，
+                # 避免 setCurrentIndex 在 idx 变化时通过信号额外触发一次
+                self.ui.scriptCombo.blockSignals(True)
                 self.ui.scriptCombo.setCurrentIndex(idx)
+                self.ui.scriptCombo.blockSignals(False)
+            else:
+                # 脚本不在列表中（可能已被删除），丢弃待还原参数并清理容器
+                self._scriptArgsToRestore = None
+            self._refreshScriptParams()
 
         self._isDirty = False
         self._suspendDirtyTracking = False
@@ -279,10 +339,12 @@ class EventEditPage(QWidget):
         Args:
             scripts: 脚本名称列表（不含 .py 后缀）
         """
-        self._suspendDirtyTracking = True
+        # 阻塞信号，避免 clear/addItems 过程中 currentIndex 变化
+        # 触发 _onScriptChanged → _refreshScriptParams 对第一个脚本做无意义的参数提取
+        self.ui.scriptCombo.blockSignals(True)
         self.ui.scriptCombo.clear()
         self.ui.scriptCombo.addItems(scripts)
-        self._suspendDirtyTracking = False
+        self.ui.scriptCombo.blockSignals(False)
 
     # ---- 内部方法 ----
 
@@ -290,6 +352,9 @@ class EventEditPage(QWidget):
         """类型分段按钮切换回调"""
         typeName = self._btnTypeMap.get(button, "Click")
         self._applyType(typeName)
+        # 用户主动切换到 Script 类型时，渲染当前选中脚本的参数
+        if typeName == "Script":
+            self._refreshScriptParams()
         self._markDirty()
 
     def _applyType(self, typeName: str):
@@ -302,11 +367,21 @@ class EventEditPage(QWidget):
         self.ui.buttonFieldLabel.setVisible(not isScript)
         self.ui.buttonCombo.setVisible(not isScript)
 
-        # paramsGroup：Script 无参数，整组隐藏；其他类型显示
-        self.ui.paramsGroup.setVisible(not isScript)
-        # intervalRow / clicksRow 仅 Multi 类型可见
-        self.ui.intervalRow.setVisible(isMulti)
-        self.ui.clicksRow.setVisible(isMulti)
+        if isScript:
+            # Script 类型：隐藏 Click/Multi 专用的参数行
+            self.ui.positionRow.setVisible(False)
+            self.ui.intervalRow.setVisible(False)
+            self.ui.clicksRow.setVisible(False)
+            # 脚本参数容器的可见性由 _refreshScriptParams 统一管理，
+            # 此处不干预，避免与 _onTypeChanged → _refreshScriptParams 的渲染流程冲突
+        else:
+            # 非 Script 类型：隐藏脚本参数容器，显示 paramsGroup
+            self.ui.scriptParamsContainer.setVisible(False)
+            self.ui.paramsGroup.setVisible(True)
+            self.ui.positionRow.setVisible(True)
+            # intervalRow / clicksRow 仅 Multi 类型可见
+            self.ui.intervalRow.setVisible(isMulti)
+            self.ui.clicksRow.setVisible(isMulti)
 
     def _onBackClicked(self):
         """返回/取消按钮点击"""
@@ -346,6 +421,7 @@ class EventEditPage(QWidget):
 
         if typeName == "Script":
             data["script"] = self.ui.scriptCombo.currentText()
+            data["script_args"] = self._collectScriptArgs()
 
         self._isDirty = False
         self.saveRequested.emit(data)
@@ -440,6 +516,292 @@ class EventEditPage(QWidget):
         else:
             # 自定义键盘按键名，直接设置文本
             self.ui.buttonCombo.setCurrentText(value)
+
+    # ---- 脚本参数动态渲染 ----
+
+    def _onScriptChanged(self, index: int):
+        """脚本选择变更回调：重新渲染参数控件"""
+        self._refreshScriptParams()
+        self._markDirty()
+
+    def _refreshScriptParams(self):
+        """根据当前选中的脚本，提取参数声明并动态渲染参数控件"""
+        scriptName = self.ui.scriptCombo.currentText().strip()
+        if not scriptName:
+            self._clearScriptParams()
+            self.ui.scriptParamsContainer.setVisible(False)
+            self.ui.paramsGroup.setVisible(False)
+            return
+
+        # 通过提取沙箱获取参数声明
+        scriptCode = ScriptCode.get_by_name(scriptName)
+        paramDefs = scriptCode.get_param_defs()
+
+        self._clearScriptParams()
+        # 规范化：CHOICE 空 options 降级为 STR，确保声明与控件类型一致
+        self._currentParamDefs = [
+            ParamDef(name=pd.name, type=ParamType.STR, default=pd.default,
+                     label=pd.label, description=pd.description, options=None)
+            if pd.type == ParamType.CHOICE and not pd.options else pd
+            for pd in paramDefs
+        ]
+
+        if not self._currentParamDefs:
+            # 脚本无参数，隐藏整组
+            self.ui.scriptParamsContainer.setVisible(False)
+            self.ui.paramsGroup.setVisible(False)
+            return
+
+        # 有参数：显示 paramsGroup 和脚本参数容器
+        self.ui.paramsGroup.setVisible(True)
+        self.ui.scriptParamsContainer.setVisible(True)
+
+        # 按参数声明顺序创建控件
+        scriptLayout = self.ui.scriptParamsLayout
+        for paramDef in self._currentParamDefs:
+            row = self._createParamRow(paramDef)
+            scriptLayout.addWidget(row)
+
+        # 为动态创建的输入控件安装修饰（滚轮过滤 + ComboBox 弹出淡入）
+        polishInputWidgets(self.ui.scriptParamsContainer)
+
+        # 如果有待还原的参数值，进行还原
+        if self._scriptArgsToRestore is not None:
+            self._restoreScriptArgs(self._scriptArgsToRestore)
+            self._scriptArgsToRestore = None
+
+    def _clearScriptParams(self):
+        """清除所有动态创建的脚本参数控件"""
+        layout = self.ui.scriptParamsLayout
+        while layout.count():
+            item = layout.takeAt(0)
+            widget = item.widget()
+            if widget:
+                widget.deleteLater()
+        self._currentParamDefs = []
+        self._paramWidgets = {}
+
+    def _createParamRow(self, paramDef: ParamDef) -> QFrame:
+        """根据 ParamDef 创建一个参数行（标签 + 控件）
+
+        行布局与 .ui 中定义的 hotkeyRow / scopeRow / scriptRow 等保持一致：
+        QFrame(零边距) + QHBoxLayout(spacing=12) + QLabel(role=fieldLabel, minWidth=60) + 控件
+
+        Args:
+            paramDef: 参数声明元数据
+
+        Returns:
+            包含标签和输入控件的 QFrame
+        """
+        row = QFrame()
+        row.setObjectName("paramRow")
+        hLayout = QHBoxLayout(row)
+        hLayout.setContentsMargins(0, 0, 0, 0)
+        hLayout.setSpacing(12)
+
+        # 标签：与 .ui 中的 fieldLabel 一致（role + minWidth）
+        labelText = _getLocalizedText(paramDef.label, fallback=paramDef.name)
+        label = QLabel(labelText)
+        label.setMinimumWidth(60)
+        label.setProperty("role", "fieldLabel")
+        hLayout.addWidget(label)
+
+        # 根据类型创建控件
+        widget = self._createParamWidget(paramDef)
+        self._paramWidgets[paramDef.name] = widget
+
+        if paramDef.type == ParamType.BOOL:
+            # bool 类型：开关在左侧（不加 stretch），右侧加 spacer 推到左边
+            hLayout.addWidget(widget)
+            spacer = QSpacerItem(0, 0, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
+            hLayout.addSpacerItem(spacer)
+        else:
+            # 其他类型：控件占据剩余空间
+            hLayout.addWidget(widget, 1)
+
+        # 描述文本作为 tooltip，而非独立标签，保持行布局一致性
+        descText = _getLocalizedText(paramDef.description)
+        if descText:
+            label.setToolTip(descText)
+            widget.setToolTip(descText)
+
+        return row
+
+    def _createParamWidget(self, paramDef: ParamDef) -> QWidget:
+        """根据参数类型创建对应的输入控件
+
+        Args:
+            paramDef: 参数声明元数据
+
+        Returns:
+            输入控件实例
+        """
+        match paramDef.type:
+            case ParamType.CHOICE: return self._createChoiceWidget(paramDef)
+            case ParamType.BOOL:   return self._createBoolWidget(paramDef)
+            case ParamType.INT:    return self._createIntWidget(paramDef)
+            case ParamType.FLOAT:  return self._createFloatWidget(paramDef)
+            case _:                return self._createStrWidget(paramDef)
+
+    def _createChoiceWidget(self, paramDef: ParamDef) -> QComboBox:
+        """创建 choice 类型下拉框
+
+        options 支持三种形式：
+        - list[T]: 值即显示文本
+        - dict[T, str]: 值 → 显示文本
+        - dict[T, dict[str, str]]: 值 → 语言 → 显示文本
+        """
+        combo = QComboBox()
+        combo.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed,
+        )
+        combo.setMinimumHeight(32)
+
+        options = paramDef.options
+
+        if isinstance(options, list):
+            for value in options:
+                displayText = str(value) if not isinstance(value, str) else value
+                combo.addItem(displayText, value)
+        elif isinstance(options, dict):
+            for key, val in options.items():
+                if isinstance(val, dict):
+                    # 多语言：val 是 {lang: text}
+                    displayText = _getLocalizedText(val, fallback=str(key))
+                else:
+                    # 单语言映射
+                    displayText = str(val)
+                combo.addItem(displayText, key)
+
+        # 设置默认选中项
+        default = paramDef.default
+        defaultIdx = combo.findData(default)
+        if defaultIdx >= 0:
+            combo.setCurrentIndex(defaultIdx)
+        else:
+            # 防御性处理：理论上 _effective_default 已将 default 修正为 options 中的有效值，
+            # 此分支不应触发；若触发则选中第一项兜底
+            if combo.count() > 0:
+                combo.setCurrentIndex(0)
+
+        combo.currentIndexChanged.connect(self._markDirty)
+        return combo
+
+    def _createBoolWidget(self, paramDef: ParamDef) -> ToggleSwitch:
+        """创建 bool 类型开关"""
+        switch = ToggleSwitch()
+        switch.setFixedSize(40, 22)
+        switch.setChecked(bool(paramDef.default))
+        switch.toggled.connect(self._markDirty)
+        return switch
+
+    _INT32_MIN, _INT32_MAX = -(1 << 31), (1 << 31) - 1
+
+    def _createIntWidget(self, paramDef: ParamDef) -> QSpinBox:
+        """创建 int 类型数值框"""
+        spinBox = QSpinBox()
+        spinBox.setMinimumHeight(32)
+        spinBox.setRange(self._INT32_MIN, self._INT32_MAX)
+        spinBox.setValue(int(paramDef.default))
+        spinBox.valueChanged.connect(self._markDirty)
+        return spinBox
+
+    def _createFloatWidget(self, paramDef: ParamDef) -> QDoubleSpinBox:
+        """创建 float 类型数值框"""
+        spinBox = QDoubleSpinBox()
+        spinBox.setMinimumHeight(32)
+        spinBox.setRange(-1e9, 1e9)  # 整数9位 + 小数6位 = 15位有效数字，匹配double精度
+        spinBox.setDecimals(6)
+        spinBox.setValue(float(paramDef.default))
+        spinBox.valueChanged.connect(self._markDirty)
+        return spinBox
+
+    def _createStrWidget(self, paramDef: ParamDef) -> QLineEdit:
+        """创建 str 类型输入框"""
+        lineEdit = QLineEdit()
+        lineEdit.setMinimumHeight(32)
+        lineEdit.setText(str(paramDef.default))
+        lineEdit.textChanged.connect(self._markDirty)
+        return lineEdit
+
+    def _collectScriptArgs(self) -> dict[str, int | float | str | bool]:
+        """从参数控件中收集所有参数值
+
+        Returns:
+            参数名 → 参数值的映射字典
+        """
+        result = {}
+        for paramDef in self._currentParamDefs:
+            widget = self._paramWidgets.get(paramDef.name)
+            if widget is None:
+                continue
+
+            value = self._getParamValue(widget, paramDef)
+            if value is None:
+                continue
+            result[paramDef.name] = value
+        return result
+
+    def _getParamValue(self, widget: QWidget, paramDef: ParamDef) -> int | float | str | bool | None:
+        """从单个控件中获取参数值
+
+        Args:
+            widget: 输入控件
+            paramDef: 参数声明
+
+        Returns:
+            参数值，空 QComboBox 时返回 None 表示跳过
+        """
+        if isinstance(widget, QComboBox):
+            if widget.count() == 0:
+                return None
+            return widget.currentData()
+        elif isinstance(widget, ToggleSwitch):
+            return widget.isChecked()
+        elif isinstance(widget, QSpinBox):
+            return widget.value()
+        elif isinstance(widget, QDoubleSpinBox):
+            return widget.value()
+        elif isinstance(widget, QLineEdit):
+            return widget.text()
+        return paramDef.default
+
+    def _restoreScriptArgs(self, scriptArgs: dict):
+        """将保存的参数值还原到参数控件
+
+        忽略已移除的参数，新增参数使用默认值填充。
+        类型转换失败时使用默认值。
+
+        Args:
+            scriptArgs: 参数名 → 参数值的映射字典
+        """
+        for paramDef in self._currentParamDefs:
+            if paramDef.name not in scriptArgs:
+                continue
+
+            widget = self._paramWidgets.get(paramDef.name)
+            if widget is None:
+                continue
+
+            savedValue = scriptArgs[paramDef.name]
+
+            try:
+                if isinstance(widget, QComboBox):
+                    idx = widget.findData(savedValue)
+                    if idx >= 0:
+                        widget.setCurrentIndex(idx)
+                    # 值不在 options 中时保持默认
+                elif isinstance(widget, ToggleSwitch):
+                    widget.setChecked(bool(savedValue))
+                elif isinstance(widget, QSpinBox):
+                    widget.setValue(int(savedValue))
+                elif isinstance(widget, QDoubleSpinBox):
+                    widget.setValue(float(savedValue))
+                elif isinstance(widget, QLineEdit):
+                    widget.setText(str(savedValue))
+            except (ValueError, TypeError):
+                # 类型转换失败，保持默认值
+                pass
 
     @staticmethod
     def _onOpenScriptsDir():

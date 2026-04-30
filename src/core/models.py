@@ -1,5 +1,48 @@
 import dataclasses
 from dataclasses import dataclass, field, fields
+from enum import StrEnum
+
+
+class ParamType(StrEnum):
+    BOOL = 'bool'
+    CHOICE = 'choice'
+    FLOAT = 'float'
+    INT = 'int'
+    STR = 'str'
+
+    @classmethod
+    def infer_from(cls, default, options=None) -> 'ParamType':
+        """从 default 值推断参数类型。
+
+        Args:
+            default: 参数默认值。
+            options: 选项列表或字典，不为 None 时返回 CHOICE。
+
+        Returns:
+            ParamType: 推断出的参数类型。
+        """
+        if options is not None:
+            return cls.CHOICE
+        # 注意：bool 是 int 的子类，必须先检查 bool
+        if isinstance(default, bool):
+            return cls.BOOL
+        if isinstance(default, int):
+            return cls.INT
+        if isinstance(default, float):
+            return cls.FLOAT
+        if isinstance(default, str):
+            return cls.STR
+        return cls.STR
+
+
+@dataclass
+class ParamDef:
+    name: str
+    type: ParamType
+    default: int | float | str | bool
+    label: str | dict[str, str] | None = None
+    description: str | dict[str, str] | None = None
+    options: list | dict | None = None
 
 
 @dataclass
@@ -18,7 +61,7 @@ class MultiParams:
 
 @dataclass
 class ScriptParams:
-    pass
+    script_args: dict[str, int | float | str | bool] = field(default_factory=dict)
 
 
 PARAMS_CLASS = {
