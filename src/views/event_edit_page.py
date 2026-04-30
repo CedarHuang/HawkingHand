@@ -638,6 +638,7 @@ class EventEditPage(QWidget):
         """
         match paramDef.type:
             case ParamType.CHOICE: return self._createChoiceWidget(paramDef)
+            case ParamType.COORD:  return self._createCoordWidget(paramDef)
             case ParamType.BOOL:   return self._createBoolWidget(paramDef)
             case ParamType.INT:    return self._createIntWidget(paramDef)
             case ParamType.FLOAT:  return self._createFloatWidget(paramDef)
@@ -687,6 +688,53 @@ class EventEditPage(QWidget):
         combo.currentIndexChanged.connect(self._markDirty)
         return combo
 
+    def _createCoordWidget(self, paramDef: ParamDef) -> QFrame:
+        """创建 coord 类型坐标输入控件（X/Y 双数值框）"""
+        container = QFrame()
+        container.setObjectName("coordContainer")
+        layout = QHBoxLayout(container)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(12)
+
+        default = paramDef.default
+        try:
+            defaultX, defaultY = int(default[0]), int(default[1])
+        except (ValueError, TypeError, IndexError):
+            defaultX, defaultY = -1, -1
+
+        xLabel = QLabel("X")
+        xLabel.setObjectName("xLabel")
+        layout.addWidget(xLabel)
+
+        spinX = QSpinBox()
+        spinX.setMinimumSize(80, 32)
+        spinX.setRange(-1, 99999)
+        spinX.setValue(defaultX)
+        spinX.valueChanged.connect(self._markDirty)
+        layout.addWidget(spinX)
+
+        yLabel = QLabel("Y")
+        yLabel.setObjectName("yLabel")
+        layout.addWidget(yLabel)
+
+        spinY = QSpinBox()
+        spinY.setMinimumSize(80, 32)
+        spinY.setRange(-1, 99999)
+        spinY.setValue(defaultY)
+        spinY.valueChanged.connect(self._markDirty)
+        layout.addWidget(spinY)
+
+        hint = QLabel(QCoreApplication.translate(
+            "EventEditPage", "(-1 = current position)"))
+        hint.setObjectName("positionHint")
+        layout.addWidget(hint)
+
+        layout.addStretch()
+
+        container._spinX = spinX
+        container._spinY = spinY
+        return container
+
     def _createBoolWidget(self, paramDef: ParamDef) -> ToggleSwitch:
         """创建 bool 类型开关"""
         switch = ToggleSwitch()
@@ -724,7 +772,7 @@ class EventEditPage(QWidget):
         lineEdit.textChanged.connect(self._markDirty)
         return lineEdit
 
-    def _collectScriptArgs(self) -> dict[str, int | float | str | bool]:
+    def _collectScriptArgs(self) -> dict[str, int | float | str | bool | list]:
         """从参数控件中收集所有参数值
 
         Returns:
@@ -742,7 +790,7 @@ class EventEditPage(QWidget):
             result[paramDef.name] = value
         return result
 
-    def _getParamValue(self, widget: QWidget, paramDef: ParamDef) -> int | float | str | bool | None:
+    def _getParamValue(self, widget: QWidget, paramDef: ParamDef) -> int | float | str | bool | list | None:
         """从单个控件中获取参数值
 
         Args:
@@ -756,6 +804,8 @@ class EventEditPage(QWidget):
             if widget.count() == 0:
                 return None
             return widget.currentData()
+        elif paramDef.type == ParamType.COORD:
+            return [widget._spinX.value(), widget._spinY.value()]
         elif isinstance(widget, ToggleSwitch):
             return widget.isChecked()
         elif isinstance(widget, QSpinBox):
@@ -791,6 +841,10 @@ class EventEditPage(QWidget):
                     if idx >= 0:
                         widget.setCurrentIndex(idx)
                     # 值不在 options 中时保持默认
+                elif paramDef.type == ParamType.COORD:
+                    if isinstance(savedValue, (list, tuple)) and len(savedValue) >= 2:
+                        widget._spinX.setValue(int(savedValue[0]))
+                        widget._spinY.setValue(int(savedValue[1]))
                 elif isinstance(widget, ToggleSwitch):
                     widget.setChecked(bool(savedValue))
                 elif isinstance(widget, QSpinBox):

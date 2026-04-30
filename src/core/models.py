@@ -6,6 +6,7 @@ from enum import StrEnum
 class ParamType(StrEnum):
     BOOL = 'bool'
     CHOICE = 'choice'
+    COORD = 'coord'
     FLOAT = 'float'
     INT = 'int'
     STR = 'str'
@@ -32,6 +33,8 @@ class ParamType(StrEnum):
             return cls.FLOAT
         if isinstance(default, str):
             return cls.STR
+        if isinstance(default, (list, tuple)):
+            return cls.COORD
         return cls.STR
 
 
@@ -39,7 +42,7 @@ class ParamType(StrEnum):
 class ParamDef:
     name: str
     type: ParamType
-    default: int | float | str | bool
+    default: int | float | str | bool | list | tuple
     label: str | dict[str, str] | None = None
     description: str | dict[str, str] | None = None
     options: list | dict | None = None
@@ -61,7 +64,7 @@ class MultiParams:
 
 @dataclass
 class ScriptParams:
-    script_args: dict[str, int | float | str | bool] = field(default_factory=dict)
+    script_args: dict[str, int | float | str | bool | list] = field(default_factory=dict)
 
 
 PARAMS_CLASS = {

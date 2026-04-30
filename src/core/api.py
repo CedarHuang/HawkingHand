@@ -386,6 +386,13 @@ def _create_context(event: models.Event):
                     return value
                 # 值不在 options 中，回退到有效默认值
                 return _effective_default(default, options)
+            elif param_type == models.ParamType.COORD:
+                if isinstance(value, (list, tuple)) and len(value) >= 2:
+                    try:
+                        return [int(value[0]), int(value[1])]
+                    except (ValueError, TypeError):
+                        pass
+                return default
             elif param_type == models.ParamType.BOOL:
                 if isinstance(value, bool):
                     return value

@@ -411,6 +411,11 @@ QFrame#scriptParamsContainer > QFrame {
     background: transparent;
 }
 
+/* 坐标参数容器 */
+QFrame#coordContainer {
+    background: transparent;
+}
+
 /* 打开脚本目录按钮 */
 QPushButton#btnOpenScriptsDir {
     border: none;
