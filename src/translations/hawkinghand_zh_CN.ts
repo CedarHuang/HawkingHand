@@ -29,25 +29,6 @@
     </message>
 </context>
 <context>
-    <name>EventController</name>
-    <message>
-        <source>Position: ({x}, {y})</source>
-        <translation>位置: ({x}, {y})</translation>
-    </message>
-    <message>
-        <source>Position: Current</source>
-        <translation>位置: 当前</translation>
-    </message>
-    <message>
-        <source>Interval: {interval}ms</source>
-        <translation>频率: {interval}ms</translation>
-    </message>
-    <message>
-        <source>Count: {clicks}</source>
-        <translation>次数: {clicks}</translation>
-    </message>
-</context>
-<context>
     <name>EventEditPage</name>
     <message>
         <source>Press a key combination...</source>
@@ -86,18 +67,6 @@
         <translation>类型</translation>
     </message>
     <message>
-        <source>Click</source>
-        <translation>单击</translation>
-    </message>
-    <message>
-        <source>Press</source>
-        <translation>按住</translation>
-    </message>
-    <message>
-        <source>Multi</source>
-        <translation>连点</translation>
-    </message>
-    <message>
         <source>Script</source>
         <translation>脚本</translation>
     </message>
@@ -106,8 +75,12 @@
         <translation>热键</translation>
     </message>
     <message>
-        <source>Button</source>
-        <translation>按键</translation>
+        <source>Toggle</source>
+        <translation>切换</translation>
+    </message>
+    <message>
+        <source>Hold</source>
+        <translation>按住</translation>
     </message>
     <message>
         <source>Open scripts directory</source>
@@ -122,36 +95,12 @@
         <translation>范围</translation>
     </message>
     <message>
-        <source>Trigger</source>
-        <translation>触发</translation>
-    </message>
-    <message>
-        <source>Trigger on key release</source>
-        <translation>松开按键时触发</translation>
-    </message>
-    <message>
         <source>process:window (e.g. chrome.exe:*)</source>
         <translation>进程名:窗口标题（如 chrome.exe:*）</translation>
     </message>
     <message>
-        <source>Position</source>
-        <translation>位置</translation>
-    </message>
-    <message>
         <source>(-1 = current position)</source>
         <translation>（-1 = 当前位置）</translation>
-    </message>
-    <message>
-        <source>Interval</source>
-        <translation>间隔</translation>
-    </message>
-    <message>
-        <source>Count</source>
-        <translation>次数</translation>
-    </message>
-    <message>
-        <source>(-1 = infinite)</source>
-        <translation>（-1 = 无限）</translation>
     </message>
     <message>
         <source>Cancel</source>
@@ -162,20 +111,8 @@
         <translation>💾 保存</translation>
     </message>
     <message>
-        <source>Left</source>
-        <translation>左键</translation>
-    </message>
-    <message>
-        <source>Right</source>
-        <translation>右键</translation>
-    </message>
-    <message>
         <source>Parameters</source>
         <translation>参数设置</translation>
-    </message>
-    <message>
-        <source> ms</source>
-        <translation> 毫秒</translation>
     </message>
 </context>
 <context>
@@ -273,6 +210,14 @@ This action cannot be undone.</source>
     <message>
         <source>Script name (letters, digits, underscores):</source>
         <translation>脚本名称（字母、数字、下划线）：</translation>
+    </message>
+    <message>
+        <source>Reserved Name</source>
+        <translation>保留名称</translation>
+    </message>
+    <message>
+        <source>Script names starting with &apos;__&apos; are reserved for built-in scripts.</source>
+        <translation>以&quot;__&quot;开头的脚本名称是内置脚本的保留名称。</translation>
     </message>
     <message>
         <source>Invalid Name</source>

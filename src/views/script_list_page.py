@@ -56,9 +56,11 @@ class ScriptListPage(QWidget):
         scriptFiles = []
 
         if os.path.isdir(scriptsDir):
-            for f in sorted(os.listdir(scriptsDir)):
-                if f.endswith(".py") and not f.startswith("__"):
-                    scriptFiles.append(os.path.join(scriptsDir, f))
+            files = [f for f in os.listdir(scriptsDir) if f.endswith(".py")]
+            # _ 开头脚本排最前，其余按字母序
+            files.sort(key=lambda n: (not n.startswith("_"), n.lower()))
+            for f in files:
+                scriptFiles.append(os.path.join(scriptsDir, f))
 
         # 切换空状态/列表显示
         hasScripts = len(scriptFiles) > 0

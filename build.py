@@ -465,10 +465,16 @@ def cmd_dist() -> bool:
 
     # 构建 Nuitka 命令
     # 项目级配置已在 main.py 中通过 # nuitka-project: 注释声明
-    # --product-version 由 build.py 动态注入
+    # --product-version 和 --include-data-files 由 build.py 动态注入
     cmd = [sys.executable, "-m", "nuitka",
            "--assume-yes-for-downloads",
-           f"--product-version={version}", str(_MAIN_SCRIPT)]
+           f"--product-version={version}"]
+    # 内置脚本 .py 文件需作为数据打包（Nuitka 不认 .py 为数据文件），
+    # 由 build.py 动态扫描，增删脚本无需手动同步
+    builtins_dir = _PROJECT_ROOT / "src" / "builtins"
+    for f in sorted(builtins_dir.glob("__*.py")):
+        cmd.append(f"--include-data-files={f}=builtins/{f.name}")
+    cmd.append(str(_MAIN_SCRIPT))
 
     print(f"  ▸ 执行: {' '.join(cmd)}\n")
 

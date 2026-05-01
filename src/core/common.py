@@ -40,6 +40,11 @@ def scripts_path():
 def builtins_path():
     return os.path.join(scripts_path(), builtins_name)
 
+def builtins_src_dir():
+    if is_frozen():
+        return os.path.join(os.path.dirname(exe_path()), 'builtins')
+    return os.path.join(root_path(), 'src', 'builtins')
+
 def event_config_path():
     return os.path.join(config_path(), event_config_name)
 

@@ -197,7 +197,7 @@
                 <number>2</number>
                </property>
                <item>
-                <widget class="QPushButton" name="typeBtnClick">
+                <widget class="QPushButton" name="typeBtnToggle">
                  <property name="minimumSize">
                   <size>
                    <width>0</width>
@@ -205,7 +205,7 @@
                   </size>
                  </property>
                  <property name="text">
-                  <string>Click</string>
+                  <string>Toggle</string>
                  </property>
                  <property name="checkable">
                   <bool>true</bool>
@@ -219,7 +219,7 @@
                 </widget>
                </item>
                <item>
-                <widget class="QPushButton" name="typeBtnPress">
+                <widget class="QPushButton" name="typeBtnHold">
                  <property name="minimumSize">
                   <size>
                    <width>0</width>
@@ -227,45 +227,7 @@
                   </size>
                  </property>
                  <property name="text">
-                  <string>Press</string>
-                 </property>
-                 <property name="checkable">
-                  <bool>true</bool>
-                 </property>
-                 <property name="flat">
-                  <bool>true</bool>
-                 </property>
-                </widget>
-               </item>
-               <item>
-                <widget class="QPushButton" name="typeBtnMulti">
-                 <property name="minimumSize">
-                  <size>
-                   <width>0</width>
-                   <height>28</height>
-                  </size>
-                 </property>
-                 <property name="text">
-                  <string>Multi</string>
-                 </property>
-                 <property name="checkable">
-                  <bool>true</bool>
-                 </property>
-                 <property name="flat">
-                  <bool>true</bool>
-                 </property>
-                </widget>
-               </item>
-               <item>
-                <widget class="QPushButton" name="typeBtnScript">
-                 <property name="minimumSize">
-                  <size>
-                   <width>0</width>
-                   <height>28</height>
-                  </size>
-                 </property>
-                 <property name="text">
-                  <string>Script</string>
+                  <string>Hold</string>
                  </property>
                  <property name="checkable">
                   <bool>true</bool>
@@ -320,62 +282,7 @@
            </layout>
           </item>
           <item>
-           <layout class="QHBoxLayout" name="targetRow">
-            <property name="spacing">
-             <number>12</number>
-            </property>
-            <item>
-             <widget class="QLabel" name="buttonFieldLabel">
-              <property name="minimumSize">
-               <size>
-                <width>60</width>
-                <height>0</height>
-               </size>
-              </property>
-              <property name="text">
-               <string>Button</string>
-              </property>
-              <property name="role" stdset="0">
-               <string notr="true">fieldLabel</string>
-              </property>
-             </widget>
-            </item>
-            <item>
-             <widget class="QComboBox" name="buttonCombo">
-              <property name="sizePolicy">
-               <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
-                <horstretch>0</horstretch>
-                <verstretch>0</verstretch>
-               </sizepolicy>
-              </property>
-              <property name="minimumSize">
-               <size>
-                <width>0</width>
-                <height>32</height>
-               </size>
-              </property>
-              <property name="editable">
-               <bool>true</bool>
-              </property>
-              <item>
-               <property name="text">
-                <string>Left</string>
-               </property>
-              </item>
-              <item>
-               <property name="text">
-                <string>Right</string>
-               </property>
-              </item>
-             </widget>
-            </item>
-           </layout>
-          </item>
-          <item>
            <widget class="QFrame" name="scriptRow">
-            <property name="visible">
-             <bool>false</bool>
-            </property>
             <layout class="QHBoxLayout" name="scriptRowLayout">
              <property name="spacing">
               <number>12</number>
@@ -522,68 +429,6 @@
             </item>
            </layout>
           </item>
-          <item>
-           <layout class="QHBoxLayout" name="triggerOnReleaseRow">
-            <property name="spacing">
-             <number>12</number>
-            </property>
-            <item>
-             <widget class="QLabel" name="triggerOnReleaseLabel">
-              <property name="minimumSize">
-               <size>
-                <width>60</width>
-                <height>0</height>
-               </size>
-              </property>
-              <property name="text">
-               <string>Trigger</string>
-              </property>
-              <property name="role" stdset="0">
-               <string notr="true">fieldLabel</string>
-              </property>
-             </widget>
-            </item>
-            <item>
-             <widget class="ToggleSwitch" name="triggerOnReleaseCheck">
-              <property name="minimumSize">
-               <size>
-                <width>40</width>
-                <height>22</height>
-               </size>
-              </property>
-              <property name="maximumSize">
-               <size>
-                <width>40</width>
-                <height>22</height>
-               </size>
-              </property>
-              <property name="checkable">
-               <bool>true</bool>
-              </property>
-             </widget>
-            </item>
-            <item>
-             <widget class="QLabel" name="triggerOnReleaseText">
-              <property name="text">
-               <string>Trigger on key release</string>
-              </property>
-             </widget>
-            </item>
-            <item>
-             <spacer name="triggerOnReleaseSpacer">
-              <property name="orientation">
-               <enum>Qt::Horizontal</enum>
-              </property>
-              <property name="sizeHint" stdset="0">
-               <size>
-                <width>40</width>
-                <height>20</height>
-               </size>
-              </property>
-             </spacer>
-            </item>
-           </layout>
-          </item>
          </layout>
         </widget>
        </item>
@@ -642,263 +487,6 @@
              <property name="bottomMargin">
               <number>0</number>
              </property>
-            </layout>
-           </widget>
-          </item>
-          <item>
-           <widget class="QFrame" name="positionRow">
-            <layout class="QHBoxLayout" name="positionRowLayout">
-             <property name="spacing">
-              <number>12</number>
-             </property>
-             <property name="leftMargin">
-              <number>0</number>
-             </property>
-             <property name="topMargin">
-              <number>0</number>
-             </property>
-             <property name="rightMargin">
-              <number>0</number>
-             </property>
-             <property name="bottomMargin">
-              <number>0</number>
-             </property>
-             <item>
-              <widget class="QLabel" name="positionFieldLabel">
-               <property name="minimumSize">
-                <size>
-                 <width>60</width>
-                 <height>0</height>
-                </size>
-               </property>
-               <property name="text">
-                <string>Position</string>
-               </property>
-               <property name="role" stdset="0">
-                <string notr="true">fieldLabel</string>
-               </property>
-              </widget>
-             </item>
-             <item>
-              <widget class="QLabel" name="xLabel">
-               <property name="text">
-                <string notr="true">X</string>
-               </property>
-              </widget>
-             </item>
-             <item>
-              <widget class="QSpinBox" name="positionX">
-               <property name="minimumSize">
-                <size>
-                 <width>80</width>
-                 <height>32</height>
-                </size>
-               </property>
-               <property name="minimum">
-                <number>-1</number>
-               </property>
-               <property name="maximum">
-                <number>99999</number>
-               </property>
-               <property name="value">
-                <number>-1</number>
-               </property>
-              </widget>
-             </item>
-             <item>
-              <widget class="QLabel" name="yLabel">
-               <property name="text">
-                <string notr="true">Y</string>
-               </property>
-              </widget>
-             </item>
-             <item>
-              <widget class="QSpinBox" name="positionY">
-               <property name="minimumSize">
-                <size>
-                 <width>80</width>
-                 <height>32</height>
-                </size>
-               </property>
-               <property name="minimum">
-                <number>-1</number>
-               </property>
-               <property name="maximum">
-                <number>99999</number>
-               </property>
-               <property name="value">
-                <number>-1</number>
-               </property>
-              </widget>
-             </item>
-             <item>
-              <widget class="QLabel" name="positionHint">
-               <property name="text">
-                <string>(-1 = current position)</string>
-               </property>
-              </widget>
-             </item>
-             <item>
-              <spacer name="positionRowSpacer">
-               <property name="orientation">
-                <enum>Qt::Horizontal</enum>
-               </property>
-               <property name="sizeHint" stdset="0">
-                <size>
-                 <width>40</width>
-                 <height>20</height>
-                </size>
-               </property>
-              </spacer>
-             </item>
-            </layout>
-           </widget>
-          </item>
-          <item>
-           <widget class="QFrame" name="intervalRow">
-            <layout class="QHBoxLayout" name="intervalRowLayout">
-             <property name="spacing">
-              <number>12</number>
-             </property>
-             <property name="leftMargin">
-              <number>0</number>
-             </property>
-             <property name="topMargin">
-              <number>0</number>
-             </property>
-             <property name="rightMargin">
-              <number>0</number>
-             </property>
-             <property name="bottomMargin">
-              <number>0</number>
-             </property>
-             <item>
-              <widget class="QLabel" name="intervalFieldLabel">
-               <property name="minimumSize">
-                <size>
-                 <width>60</width>
-                 <height>0</height>
-                </size>
-               </property>
-               <property name="text">
-                <string>Interval</string>
-               </property>
-               <property name="role" stdset="0">
-                <string notr="true">fieldLabel</string>
-               </property>
-              </widget>
-             </item>
-             <item>
-              <widget class="QSpinBox" name="intervalInput">
-               <property name="minimumSize">
-                <size>
-                 <width>100</width>
-                 <height>32</height>
-                </size>
-               </property>
-               <property name="minimum">
-                <number>1</number>
-               </property>
-               <property name="maximum">
-                <number>999999</number>
-               </property>
-               <property name="value">
-                <number>100</number>
-               </property>
-               <property name="suffix">
-                <string> ms</string>
-               </property>
-              </widget>
-             </item>
-             <item>
-              <spacer name="intervalRowSpacer">
-               <property name="orientation">
-                <enum>Qt::Horizontal</enum>
-               </property>
-               <property name="sizeHint" stdset="0">
-                <size>
-                 <width>40</width>
-                 <height>20</height>
-                </size>
-               </property>
-              </spacer>
-             </item>
-            </layout>
-           </widget>
-          </item>
-          <item>
-           <widget class="QFrame" name="clicksRow">
-            <layout class="QHBoxLayout" name="clicksRowLayout">
-             <property name="spacing">
-              <number>12</number>
-             </property>
-             <property name="leftMargin">
-              <number>0</number>
-             </property>
-             <property name="topMargin">
-              <number>0</number>
-             </property>
-             <property name="rightMargin">
-              <number>0</number>
-             </property>
-             <property name="bottomMargin">
-              <number>0</number>
-             </property>
-             <item>
-              <widget class="QLabel" name="clicksFieldLabel">
-               <property name="minimumSize">
-                <size>
-                 <width>60</width>
-                 <height>0</height>
-                </size>
-               </property>
-               <property name="text">
-                <string>Count</string>
-               </property>
-               <property name="role" stdset="0">
-                <string notr="true">fieldLabel</string>
-               </property>
-              </widget>
-             </item>
-             <item>
-              <widget class="QSpinBox" name="clicksInput">
-               <property name="minimumSize">
-                <size>
-                 <width>100</width>
-                 <height>32</height>
-                </size>
-               </property>
-               <property name="minimum">
-                <number>-1</number>
-               </property>
-               <property name="maximum">
-                <number>999999</number>
-               </property>
-               <property name="value">
-                <number>-1</number>
-               </property>
-              </widget>
-             </item>
-             <item>
-              <widget class="QLabel" name="clicksHint">
-               <property name="text">
-                <string>(-1 = infinite)</string>
-               </property>
-              </widget>
-             </item>
-             <item>
-              <spacer name="clicksRowSpacer">
-               <property name="orientation">
-                <enum>Qt::Horizontal</enum>
-               </property>
-               <property name="sizeHint" stdset="0">
-                <size>
-                 <width>40</width>
-                 <height>20</height>
-                </size>
-               </property>
-              </spacer>
-             </item>
             </layout>
            </widget>
           </item>

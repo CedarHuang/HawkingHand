@@ -16,6 +16,42 @@ from core import vision_backend
 from core.models import ParamDef, ParamType
 
 
+def _scan_builtin_names() -> frozenset[str]:
+    src_dir = common.builtins_src_dir()
+    if not os.path.isdir(src_dir):
+        return frozenset()
+    return frozenset(
+        os.path.splitext(f.name)[0]
+        for f in os.scandir(src_dir)
+        if f.is_file() and f.name.endswith('.py')
+    )
+
+
+BUILTIN_SCRIPT_NAMES = _scan_builtin_names()
+
+
+def is_builtin(name: str) -> bool:
+    """判断脚本名是否为内置脚本。"""
+    return name in BUILTIN_SCRIPT_NAMES
+
+def ensure_builtin_scripts():
+    """将内置脚本源文件复制到用户 scripts 目录。"""
+    src_dir = common.builtins_src_dir()
+    if not os.path.isdir(src_dir):
+        return
+    scripts_dir = common.scripts_path()
+    for name in BUILTIN_SCRIPT_NAMES:
+        src = os.path.join(src_dir, f'{name}.py')
+        dst = os.path.join(scripts_dir, f'{name}.py')
+        try:
+            with open(src, 'r', encoding='utf-8') as f:
+                code = f.read()
+            with open(dst, 'w', encoding='utf-8') as f:
+                f.write(code)
+        except OSError:
+            logger.script.error(f'Failed to sync built-in script {name}.py:', exc_info=True)
+
+
 class ScriptCode:
     instances = {
         # key: script path
@@ -25,6 +61,9 @@ class ScriptCode:
     @classmethod
     def get_by_name(cls, script_name):
         script_path = os.path.join(common.scripts_path(), f'{script_name}.py')
+        # 内置脚本：文件被删后恢复
+        if is_builtin(script_name) and not os.path.exists(script_path):
+            ensure_builtin_scripts()
         script_path = os.path.realpath(script_path)
         instance = cls.instances.get(script_path)
         if not instance:
@@ -93,6 +132,7 @@ class ScriptObserver(watchdog.events.FileSystemEventHandler):
         event_listener.restart()
 
     def start(self):
+        ensure_builtin_scripts()
         self.observer.start()
         logger.script.debug(f'Started observing scripts directory: {common.scripts_path()}')
 
@@ -101,6 +141,8 @@ class ScriptObserver(watchdog.events.FileSystemEventHandler):
         self.observer.join()
         logger.script.debug(f'Stopped observing scripts directory: {common.scripts_path()}')
 
+# 模块加载时立即确保内置脚本存在
+ensure_builtin_scripts()
 script_observer = ScriptObserver()
 
 
@@ -212,6 +254,7 @@ class ScriptContext(dict):
 class ExtractContext(ScriptContext):
     def __init__(self):
         super().__init__(None)
+        self._script_name = ''
 
     def create_restricted_builtins(self):
         restricted_builtins = super().create_restricted_builtins()
@@ -219,8 +262,8 @@ class ExtractContext(ScriptContext):
         def _make_disabled_handler(name):
             def handler(*args, **kwargs):
                 logger.script.debug(
-                    f'_builtin_ <{name}> is disabled in param extraction sandbox, '
-                    f'script execution terminated'
+                    f'Script <{self._script_name}> called disabled builtin <{name}> '
+                    f'in param extraction sandbox, script execution terminated'
                 )
                 return restricted_builtins['exit']()
             return handler
@@ -233,6 +276,7 @@ class ExtractContext(ScriptContext):
         return restricted_builtins
 
     def run_with_timeout(self, script_code: ScriptCode) -> list[ParamDef]:
+        self._script_name = script_code.name
         # param_defs 由 _extract_params 闭包捕获，运行后通过 self 访问
         param_defs: list[ParamDef] = []
         self['params'] = self._create_extract_params(param_defs)

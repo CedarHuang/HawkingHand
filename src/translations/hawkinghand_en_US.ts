@@ -29,25 +29,6 @@
     </message>
 </context>
 <context>
-    <name>EventController</name>
-    <message>
-        <source>Position: ({x}, {y})</source>
-        <translation></translation>
-    </message>
-    <message>
-        <source>Position: Current</source>
-        <translation></translation>
-    </message>
-    <message>
-        <source>Interval: {interval}ms</source>
-        <translation></translation>
-    </message>
-    <message>
-        <source>Count: {clicks}</source>
-        <translation></translation>
-    </message>
-</context>
-<context>
     <name>EventEditPage</name>
     <message>
         <source>Press a key combination...</source>
@@ -86,18 +67,6 @@
         <translation></translation>
     </message>
     <message>
-        <source>Click</source>
-        <translation></translation>
-    </message>
-    <message>
-        <source>Press</source>
-        <translation></translation>
-    </message>
-    <message>
-        <source>Multi</source>
-        <translation></translation>
-    </message>
-    <message>
         <source>Script</source>
         <translation></translation>
     </message>
@@ -106,7 +75,11 @@
         <translation></translation>
     </message>
     <message>
-        <source>Button</source>
+        <source>Toggle</source>
+        <translation></translation>
+    </message>
+    <message>
+        <source>Hold</source>
         <translation></translation>
     </message>
     <message>
@@ -122,35 +95,11 @@
         <translation></translation>
     </message>
     <message>
-        <source>Trigger</source>
-        <translation></translation>
-    </message>
-    <message>
-        <source>Trigger on key release</source>
-        <translation></translation>
-    </message>
-    <message>
         <source>process:window (e.g. chrome.exe:*)</source>
         <translation></translation>
     </message>
     <message>
-        <source>Position</source>
-        <translation></translation>
-    </message>
-    <message>
         <source>(-1 = current position)</source>
-        <translation></translation>
-    </message>
-    <message>
-        <source>Interval</source>
-        <translation></translation>
-    </message>
-    <message>
-        <source>Count</source>
-        <translation></translation>
-    </message>
-    <message>
-        <source>(-1 = infinite)</source>
         <translation></translation>
     </message>
     <message>
@@ -162,19 +111,7 @@
         <translation></translation>
     </message>
     <message>
-        <source>Left</source>
-        <translation></translation>
-    </message>
-    <message>
-        <source>Right</source>
-        <translation></translation>
-    </message>
-    <message>
         <source>Parameters</source>
-        <translation></translation>
-    </message>
-    <message>
-        <source> ms</source>
         <translation></translation>
     </message>
 </context>
@@ -274,6 +211,14 @@ This action cannot be undone.</source>
         <translation></translation>
     </message>
     <message>
+        <source>Reserved Name</source>
+        <translation></translation>
+    </message>
+    <message>
+        <source>Script names starting with &apos;__&apos; are reserved for built-in scripts.</source>
+        <translation></translation>
+    </message>
+    <message>
         <source>Invalid Name</source>
         <translation></translation>
     </message>
@@ -331,7 +276,7 @@ This action cannot be undone.</source>
     </message>
     <message>
         <source>💾 Save</source>
-        <translation type="unfinished"></translation>
+        <translation></translation>
     </message>
 </context>
 <context>

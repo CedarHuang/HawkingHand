@@ -19,6 +19,7 @@ from pyqcodeeditor.QSyntaxStyle import QSyntaxStyle
 
 from core import logger, common
 from core.config import settings as configSettings
+from core.scripts import is_builtin
 from ui.generated.ui_script_edit_page import Ui_ScriptEditPage
 from views.appearance import resolveTheme
 from views.script_editor import PythonCodeEditor, CompletionKind, CompletionModel, COMPLETION_TEXT_ROLE
@@ -124,8 +125,12 @@ class ScriptEditPage(QWidget):
         self._updateContextCompletions()
 
     def saveScript(self):
-        """保存编辑器内容到脚本文件"""
+        """保存编辑器内容到脚本文件（内置脚本不可保存）"""
         if not self._filePath or not self._isModified:
+            return
+
+        name = os.path.splitext(os.path.basename(self._filePath))[0]
+        if is_builtin(name):
             return
 
         try:

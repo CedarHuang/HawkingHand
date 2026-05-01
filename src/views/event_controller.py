@@ -9,26 +9,14 @@ import copy
 import glob
 import os
 
-from PySide6.QtCore import QCoreApplication
 from PySide6.QtWidgets import QStackedWidget, QPushButton
 
 from core import common
 from core.config import events as configEvents
-from core.input_backend import MOUSE_LEFT, MOUSE_RIGHT
-from core.models import Event, ClickParams, PressParams, MultiParams, ScriptParams
+from core.models import Event, ScriptParams
 from views.constants import PageIndex
 from views.event_edit_page import EventEditPage
 from views.event_list_page import EventListPage
-
-# 鼠标按钮内部值 → 显示名称映射
-_MOUSE_BUTTON_DISPLAY = {
-    MOUSE_LEFT: 'Left',
-    MOUSE_RIGHT: 'Right',
-}
-
-def _displayTarget(target: str) -> str:
-    """将内部按钮值转换为用户友好的显示名称"""
-    return _MOUSE_BUTTON_DISPLAY.get(target, target)
 
 
 class EventController:
@@ -75,48 +63,29 @@ class EventController:
         Returns:
             (eventType, hotkey, target, scope, extra, enabled)
         """
-        eventType = event.type or "Click"
+        eventType = event.type or "Toggle"
         hotkey = event.hotkey or ""
-        target = _displayTarget(event.target or "")
+        target = event.target or ""
         scope = event.scope or "*"
         enabled = event.enabled
+        extra = ""
 
-        # 构建额外信息文本
-        extraParts = []
-
-        # 位置信息
-        if event.posX != -1 or event.posY != -1:
-            extraParts.append(
-                QCoreApplication.translate("EventController", "Position: ({x}, {y})").format(x=event.posX, y=event.posY))
-
-        if not extraParts and eventType in ("Click", "Press"):
-            extraParts.append(QCoreApplication.translate("EventController", "Position: Current"))
-
-        # Multi 类型的频率和次数
-        if eventType == "Multi":
-            interval = event.interval if event.interval is not None else 100
-            clicks = event.clicks if event.clicks is not None else -1
-            extraParts.append(
-                QCoreApplication.translate("EventController", "Interval: {interval}ms").format(interval=interval))
-            clicksText = "∞" if clicks == -1 else str(clicks)
-            extraParts.append(
-                QCoreApplication.translate("EventController", "Count: {clicks}").format(clicks=clicksText))
-
-        extra = " · ".join(extraParts)
         return eventType, hotkey, target, scope, extra, enabled
 
     @staticmethod
     def _scanScripts() -> list[str]:
-        """扫描 scripts 目录，返回脚本名称列表（不含 .py 后缀和 __builtins__）"""
+        """扫描 scripts 目录，返回脚本名称列表（不含 .py 后缀）。__builtins__ 不显示。"""
         scriptsDir = common.scripts_path()
         if not os.path.isdir(scriptsDir):
             return []
         scripts = []
-        for f in sorted(glob.glob(os.path.join(scriptsDir, "*.py"))):
+        for f in glob.glob(os.path.join(scriptsDir, "*.py")):
             name = os.path.splitext(os.path.basename(f))[0]
-            if name.startswith("__"):
+            if name == "__builtins__":
                 continue
             scripts.append(name)
+        # _ 开头脚本排最前，其余按字母序
+        scripts.sort(key=lambda n: (not n.startswith("_"), n.lower()))
         return scripts
 
     # ---- 页面导航 ----
@@ -131,6 +100,7 @@ class EventController:
         self._editingIndex = -1
         self._eventEditPage.resetForm(isEditing=False)
         self._eventEditPage.setScriptList(self._scanScripts())
+        self._eventEditPage.refreshScriptParams()
         self._contentStack.setCurrentIndex(PageIndex.EVENT_EDIT)
 
     def goToEditEvent(self, index: int):
@@ -145,22 +115,13 @@ class EventController:
 
         # 将 Event 对象转换为表单数据字典
         formData = {
-            "type": event.type or "Click",
+            "type": event.type or "Toggle",
             "hotkey": event.hotkey or "",
-            "target": event.target or MOUSE_LEFT,
             "scope": event.scope or "*",
-            "trigger_on_release": event.trigger_on_release,
-            "posX": event.posX,
-            "posY": event.posY,
-            "interval": event.interval if event.interval is not None else 100,
-            "clicks": event.clicks if event.clicks is not None else -1,
+            "script": event.target or "__click__",
         }
-
-        if event.type == "Script":
-            formData["script"] = event.target or ""
-            # 传递脚本参数值
-            if isinstance(event.params, ScriptParams) and event.params.script_args:
-                formData["script_args"] = event.params.script_args
+        if event.params.script_args:
+            formData["script_args"] = event.params.script_args
 
         self._eventEditPage.setFormData(formData)
         self._contentStack.setCurrentIndex(PageIndex.EVENT_EDIT)
@@ -169,7 +130,7 @@ class EventController:
 
     def onEventSaved(self, data: dict):
         """事件保存：将表单数据写入 config.events 并刷新列表"""
-        eventType = data.get("type", "Click")
+        eventType = data.get("type", "Toggle")
         hotkey = data.get("hotkey", "")
 
         # scope 为空时默认为 "*"
@@ -183,37 +144,13 @@ class EventController:
         else:
             enabled = True
 
-        posX = data.get("posX", -1)
-        posY = data.get("posY", -1)
-
-        # 根据类型构建对应的 params
-        if eventType == "Script":
-            target = data.get("script", "")
-            params = ScriptParams(script_args=data.get("script_args", {}))
-        elif eventType == "Multi":
-            target = data.get("target", MOUSE_LEFT)
-            params = MultiParams(
-                position=[posX, posY],
-                interval=data.get("interval", 100),
-                clicks=data.get("clicks", -1),
-            )
-        elif eventType == "Press":
-            target = data.get("target", MOUSE_LEFT)
-            params = PressParams(position=[posX, posY])
-        else:
-            target = data.get("target", MOUSE_LEFT)
-            params = ClickParams(position=[posX, posY])
-
-        trigger_on_release = data.get("trigger_on_release", False)
-
         event = Event(
             type=eventType,
             hotkey=hotkey,
-            target=target,
+            target=data.get("script", ""),
             scope=scopeVal,
-            trigger_on_release=trigger_on_release,
             enabled=enabled,
-            params=params,
+            params=ScriptParams(script_args=data.get("script_args", {})),
         )
 
         # 保存到配置

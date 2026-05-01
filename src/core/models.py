@@ -50,81 +50,25 @@ class ParamDef:
 
 
 @dataclass
-class ClickParams:
-    position: list = field(default_factory=lambda: [-1, -1])
-
-@dataclass
-class PressParams:
-    position: list = field(default_factory=lambda: [-1, -1])
-
-@dataclass
-class MultiParams:
-    position: list = field(default_factory=lambda: [-1, -1])
-    interval: int = 100
-    clicks: int = -1
-
-@dataclass
 class ScriptParams:
     script_args: dict[str, int | float | str | bool | list] = field(default_factory=dict)
 
 
-PARAMS_CLASS = {
-    'Click': ClickParams,
-    'Press': PressParams,
-    'Multi': MultiParams,
-    'Script': ScriptParams,
-}
-
-
 @dataclass
 class Event:
-    type: str = 'Click'
+    type: str = 'Toggle'
     hotkey: str = ''
-    target: str = 'mouse_left'
+    target: str = '__click__'
     scope: str = '*'
-    trigger_on_release: bool = False
     enabled: bool = True
-    params: ClickParams | PressParams | MultiParams | ScriptParams = field(default_factory=ClickParams)
-
-
-    @property
-    def position(self) -> list:
-        return getattr(self.params, 'position', [-1, -1])
-
-    @property
-    def posX(self) -> int:
-        pos = self.position
-        if isinstance(pos, (list, tuple)) and len(pos) >= 1:
-            return pos[0]
-        return -1
-
-    @property
-    def posY(self) -> int:
-        pos = self.position
-        if isinstance(pos, (list, tuple)) and len(pos) >= 2:
-            return pos[1]
-        return -1
-
-    @property
-    def interval(self) -> int | None:
-        return getattr(self.params, 'interval', None)
-
-    @property
-    def clicks(self) -> int | None:
-        return getattr(self.params, 'clicks', None)
-
+    params: ScriptParams = field(default_factory=ScriptParams)
 
     @classmethod
     def from_dict(cls, data: dict) -> 'Event':
-        event_type = data.get('type', 'Click')
-        params_cls = PARAMS_CLASS.get(event_type, ClickParams)
-
-        params_data = data.get('params', {})
-        known_params = {f.name for f in fields(params_cls)}
-        params = params_cls(**{k: v for k, v in params_data.items() if k in known_params})
-
         event_fields = {f.name for f in fields(cls)} - {'params'}
         base = {k: v for k, v in data.items() if k in event_fields}
+        params_data = data.get('params', {})
+        params = ScriptParams(script_args=params_data.get('script_args', {}))
         return cls(**base, params=params)
 
     def to_dict(self) -> dict:

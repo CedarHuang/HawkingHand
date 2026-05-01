@@ -192,31 +192,19 @@ QLabel#typeLabel {
 }
 
 /* 类型标签颜色 — 通过 setProperty("eventType", "xxx") + polish 实现 */
-QLabel#typeLabel[eventType="Click"] {
+QLabel#typeLabel[eventType="Toggle"] {
     background-color: #50A14F;
 }
-QLabel#typeLabel[eventType="Press"] {
+QLabel#typeLabel[eventType="Hold"] {
     background-color: #4078F2;
-}
-QLabel#typeLabel[eventType="Multi"] {
-    background-color: #C18401;
-}
-QLabel#typeLabel[eventType="Script"] {
-    background-color: #A626A4;
 }
 
 /* 类型颜色条动态颜色 */
-QFrame#typeColorBar[eventType="Click"] {
+QFrame#typeColorBar[eventType="Toggle"] {
     background-color: #50A14F;
 }
-QFrame#typeColorBar[eventType="Press"] {
+QFrame#typeColorBar[eventType="Hold"] {
     background-color: #4078F2;
-}
-QFrame#typeColorBar[eventType="Multi"] {
-    background-color: #C18401;
-}
-QFrame#typeColorBar[eventType="Script"] {
-    background-color: #A626A4;
 }
 
 /* 热键标签 */
@@ -319,24 +307,14 @@ QFrame#typeSegmentFrame > QPushButton:hover {
 }
 
 /* 类型分段按钮 — 选中 */
-QFrame#typeSegmentFrame > QPushButton#typeBtnClick:checked {
+QFrame#typeSegmentFrame > QPushButton#typeBtnToggle:checked {
     background-color: #FFFFFF;
     color: #50A14F;
     font-weight: bold;
 }
-QFrame#typeSegmentFrame > QPushButton#typeBtnPress:checked {
+QFrame#typeSegmentFrame > QPushButton#typeBtnHold:checked {
     background-color: #FFFFFF;
     color: #4078F2;
-    font-weight: bold;
-}
-QFrame#typeSegmentFrame > QPushButton#typeBtnMulti:checked {
-    background-color: #FFFFFF;
-    color: #C18401;
-    font-weight: bold;
-}
-QFrame#typeSegmentFrame > QPushButton#typeBtnScript:checked {
-    background-color: #FFFFFF;
-    color: #A626A4;
     font-weight: bold;
 }
 
@@ -441,11 +419,6 @@ EventEditPage ToggleSwitch {
 }
 
 /* 编辑页触发方式描述文字 */
-QLabel#triggerOnReleaseText {
-    color: #696C77;
-    font-size: 13px;
-}
-
 /* 取消按钮 / 次要操作按钮 */
 QPushButton#btnCancel,
 QPushButton#btnClearLog {

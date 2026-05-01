@@ -17,7 +17,7 @@ from PySide6.QtWidgets import (
 )
 from core import common
 from core import event_listener
-from core.input_backend import MOUSE_LEFT, MOUSE_RIGHT
+from core.config import settings as configSettings
 from core.models import ParamDef, ParamType
 from core.scripts import ScriptCode
 from ui.generated.ui_event_edit_page import Ui_EventEditPage
@@ -42,6 +42,9 @@ def prettifyHotkey(hotkey: str) -> str:
 def _getLocalizedText(text: str | dict[str, str] | None, fallback: str = "") -> str:
     """从多语言文本中获取当前语言的文本。
 
+    语言回退链：用户配置 → 系统语言 → 英文 → 首个条目 → fallback
+    每层内部先精确匹配 langCode，再前缀匹配 langPrefix。
+
     Args:
         text: 单语言文本(str)或多语言映射(dict[str, str])或 None
         fallback: 当 text 为 None 或空 dict 时的回退文本
@@ -57,16 +60,24 @@ def _getLocalizedText(text: str | dict[str, str] | None, fallback: str = "") -> 
         case dict():
             if not text:
                 return fallback
-            # 获取当前语言代码
-            locale = QLocale()
-            langCode = locale.name()  # 如 "zh_CN", "en_US"
-            if langCode in text:
-                return text[langCode]
-            # 尝试仅语言部分匹配（如 "zh" 匹配 "zh_CN"）
-            langPrefix = langCode.split("_")[0]
-            for key, value in text.items():
-                if key.split("_")[0] == langPrefix:
-                    return value
+            # 构建候选语言列表
+            candidates = []
+            userLang = configSettings.language
+            if userLang and userLang != "system":
+                candidates.append(userLang)
+            candidates.append(QLocale().name())  # 系统语言
+            candidates.append("en_US")           # 英文兜底
+
+            for langCode in candidates:
+                # 精确匹配
+                if langCode in text:
+                    return text[langCode]
+                # 前缀匹配（如 "zh" 匹配 "zh_CN"）
+                langPrefix = langCode.split("_")[0]
+                for key, value in text.items():
+                    if key.split("_")[0] == langPrefix:
+                        return value
+
             # 回退到第一个条目
             return next(iter(text.values()))
         case _:
@@ -184,18 +195,14 @@ class EventEditPage(QWidget):
         # ---- 类型分段按钮互斥组 ----
         self._typeGroup = QButtonGroup(self)
         self._typeGroup.setExclusive(True)
-        self._typeGroup.addButton(self.ui.typeBtnClick)
-        self._typeGroup.addButton(self.ui.typeBtnPress)
-        self._typeGroup.addButton(self.ui.typeBtnMulti)
-        self._typeGroup.addButton(self.ui.typeBtnScript)
+        self._typeGroup.addButton(self.ui.typeBtnToggle)
+        self._typeGroup.addButton(self.ui.typeBtnHold)
         self._typeGroup.buttonClicked.connect(self._onTypeChanged)
 
         # 按钮 → 类型名称映射
         self._btnTypeMap = {
-            self.ui.typeBtnClick: "Click",
-            self.ui.typeBtnPress: "Press",
-            self.ui.typeBtnMulti: "Multi",
-            self.ui.typeBtnScript: "Script",
+            self.ui.typeBtnToggle: "Toggle",
+            self.ui.typeBtnHold: "Hold",
         }
 
         # ---- 热键录入 ----
@@ -210,20 +217,11 @@ class EventEditPage(QWidget):
         # ---- 表单变更追踪 ----
         self.ui.hotkeyInput.textChanged.connect(self._markDirty)
         self.ui.scopeInput.textChanged.connect(self._markDirty)
-        self.ui.triggerOnReleaseCheck.toggled.connect(self._markDirty)
-        self.ui.buttonCombo.currentTextChanged.connect(self._markDirty)
-        self.ui.positionX.valueChanged.connect(self._markDirty)
-        self.ui.positionY.valueChanged.connect(self._markDirty)
-        self.ui.intervalInput.valueChanged.connect(self._markDirty)
-        self.ui.clicksInput.valueChanged.connect(self._markDirty)
 
         # ---- 脚本参数动态渲染 ----
         self._currentParamDefs: list[ParamDef] = []  # 当前脚本的参数声明列表
         self._paramWidgets: dict[str, QWidget] = {}  # 参数名 → 控件的映射
         self._scriptArgsToRestore: dict | None = None  # 待还原的脚本参数值
-
-        # ---- 为预设鼠标按钮选项设置内部值（不受翻译影响） ----
-        self._initButtonComboData()
 
         # ---- 修饰输入控件（滚轮过滤 + 弹出圆角修复）----
         polishInputWidgets(self)
@@ -231,8 +229,6 @@ class EventEditPage(QWidget):
         # ---- 脚本选择变更时动态渲染参数 ----
         self.ui.scriptCombo.currentIndexChanged.connect(self._onScriptChanged)
 
-        # ---- 初始状态：Click 类型 ----
-        self._applyType("Click")
 
     # ---- 公共方法 ----
 
@@ -251,15 +247,9 @@ class EventEditPage(QWidget):
         )
 
         # 重置所有字段
-        self.ui.typeBtnClick.setChecked(True)
+        self.ui.typeBtnToggle.setChecked(True)
         self.ui.hotkeyInput.clear()
-        self.ui.buttonCombo.setCurrentIndex(0)
         self.ui.scopeInput.clear()
-        self.ui.triggerOnReleaseCheck.setChecked(False)
-        self.ui.positionX.setValue(-1)
-        self.ui.positionY.setValue(-1)
-        self.ui.intervalInput.setValue(100)
-        self.ui.clicksInput.setValue(-1)
 
         # 清除错误提示样式
         self._clearErrors()
@@ -268,9 +258,6 @@ class EventEditPage(QWidget):
         self._clearScriptParams()
         self._scriptArgsToRestore = None
 
-        # 应用类型联动
-        self._applyType("Click")
-
         self._isDirty = False
         self._suspendDirtyTracking = False
 
@@ -278,57 +265,41 @@ class EventEditPage(QWidget):
         """用数据填充表单
 
         Args:
-            data: 包含 type, hotkey, target, scope, posX, posY, interval, clicks 的字典
+            data: 包含 type, hotkey, scope, script, script_args 的字典
         """
         self._suspendDirtyTracking = True
         self._isEditing = True
         self.ui.pageTitle.setText(self.tr("Edit Event"))
 
-        eventType = data.get("type", "Click")
+        eventType = data.get("type", "Toggle")
 
         # 选中对应的类型按钮
         typeButtons = {
-            "Click": self.ui.typeBtnClick,
-            "Press": self.ui.typeBtnPress,
-            "Multi": self.ui.typeBtnMulti,
-            "Script": self.ui.typeBtnScript,
+            "Toggle": self.ui.typeBtnToggle,
+            "Hold": self.ui.typeBtnHold,
         }
         btn = typeButtons.get(eventType)
         if btn:
             btn.setChecked(True)
-        self._applyType(eventType)
 
         # 填充字段
         self.ui.hotkeyInput.setText(data.get("hotkey", ""))
-        self._setButtonComboValue(data.get("target", MOUSE_LEFT))
 
         # scope 为 "*" 或空时显示为空，让 placeholder 提示用户格式
         scopeVal = data.get("scope", "")
         self.ui.scopeInput.setText("" if scopeVal in ("", "*") else scopeVal)
 
-        self.ui.triggerOnReleaseCheck.setChecked(data.get("trigger_on_release", False))
-
-        self.ui.positionX.setValue(data.get("posX", -1))
-        self.ui.positionY.setValue(data.get("posY", -1))
-        self.ui.intervalInput.setValue(data.get("interval", 100))
-        self.ui.clicksInput.setValue(data.get("clicks", -1))
-
-        # 如果是脚本类型，设置脚本选择
-        if eventType == "Script":
-            scriptName = data.get("script", "")
-            # 存储 script_args，在 _refreshScriptParams 中还原
-            self._scriptArgsToRestore = data.get("script_args")
-            idx = self.ui.scriptCombo.findText(scriptName)
-            if idx >= 0:
-                # 阻断信号：统一由下方 _refreshScriptParams 显式触发参数提取，
-                # 避免 setCurrentIndex 在 idx 变化时通过信号额外触发一次
-                self.ui.scriptCombo.blockSignals(True)
-                self.ui.scriptCombo.setCurrentIndex(idx)
-                self.ui.scriptCombo.blockSignals(False)
-            else:
-                # 脚本不在列表中（可能已被删除），丢弃待还原参数并清理容器
-                self._scriptArgsToRestore = None
-            self._refreshScriptParams()
+        # 设置脚本选择
+        scriptName = data.get("script", "__click__")
+        self._scriptArgsToRestore = data.get("script_args")
+        idx = self.ui.scriptCombo.findText(scriptName)
+        if idx >= 0:
+            self.ui.scriptCombo.blockSignals(True)
+            self.ui.scriptCombo.setCurrentIndex(idx)
+            self.ui.scriptCombo.blockSignals(False)
+        else:
+            self._scriptArgsToRestore = None
+        self.refreshScriptParams()
 
         self._isDirty = False
         self._suspendDirtyTracking = False
@@ -340,7 +311,7 @@ class EventEditPage(QWidget):
             scripts: 脚本名称列表（不含 .py 后缀）
         """
         # 阻塞信号，避免 clear/addItems 过程中 currentIndex 变化
-        # 触发 _onScriptChanged → _refreshScriptParams 对第一个脚本做无意义的参数提取
+        # 触发 _onScriptChanged → refreshScriptParams 对第一个脚本做无意义的参数提取
         self.ui.scriptCombo.blockSignals(True)
         self.ui.scriptCombo.clear()
         self.ui.scriptCombo.addItems(scripts)
@@ -350,38 +321,7 @@ class EventEditPage(QWidget):
 
     def _onTypeChanged(self, button):
         """类型分段按钮切换回调"""
-        typeName = self._btnTypeMap.get(button, "Click")
-        self._applyType(typeName)
-        # 用户主动切换到 Script 类型时，渲染当前选中脚本的参数
-        if typeName == "Script":
-            self._refreshScriptParams()
         self._markDirty()
-
-    def _applyType(self, typeName: str):
-        """根据类型名称显示/隐藏对应字段"""
-        isScript = typeName == "Script"
-        isMulti = typeName == "Multi"
-
-        # Script 类型显示脚本选择，隐藏按键选择
-        self.ui.scriptRow.setVisible(isScript)
-        self.ui.buttonFieldLabel.setVisible(not isScript)
-        self.ui.buttonCombo.setVisible(not isScript)
-
-        if isScript:
-            # Script 类型：隐藏 Click/Multi 专用的参数行
-            self.ui.positionRow.setVisible(False)
-            self.ui.intervalRow.setVisible(False)
-            self.ui.clicksRow.setVisible(False)
-            # 脚本参数容器的可见性由 _refreshScriptParams 统一管理，
-            # 此处不干预，避免与 _onTypeChanged → _refreshScriptParams 的渲染流程冲突
-        else:
-            # 非 Script 类型：隐藏脚本参数容器，显示 paramsGroup
-            self.ui.scriptParamsContainer.setVisible(False)
-            self.ui.paramsGroup.setVisible(True)
-            self.ui.positionRow.setVisible(True)
-            # intervalRow / clicksRow 仅 Multi 类型可见
-            self.ui.intervalRow.setVisible(isMulti)
-            self.ui.clicksRow.setVisible(isMulti)
 
     def _onBackClicked(self):
         """返回/取消按钮点击"""
@@ -405,23 +345,15 @@ class EventEditPage(QWidget):
 
         # 收集表单数据
         checkedBtn = self._typeGroup.checkedButton()
-        typeName = self._btnTypeMap.get(checkedBtn, "Click")
+        typeName = self._btnTypeMap.get(checkedBtn, "Toggle")
 
         data = {
             "type": typeName,
             "hotkey": self.ui.hotkeyInput.text().strip(),
-            "target": self._getButtonComboValue(),
             "scope": self.ui.scopeInput.text().strip(),
-            "trigger_on_release": self.ui.triggerOnReleaseCheck.isChecked(),
-            "posX": self.ui.positionX.value(),
-            "posY": self.ui.positionY.value(),
-            "interval": self.ui.intervalInput.value(),
-            "clicks": self.ui.clicksInput.value(),
+            "script": self.ui.scriptCombo.currentText(),
+            "script_args": self._collectScriptArgs(),
         }
-
-        if typeName == "Script":
-            data["script"] = self.ui.scriptCombo.currentText()
-            data["script_args"] = self._collectScriptArgs()
 
         self._isDirty = False
         self.saveRequested.emit(data)
@@ -438,18 +370,9 @@ class EventEditPage(QWidget):
             self.ui.hotkeyInput.setPlaceholderText(self.tr("⚠ Hotkey is required"))
             valid = False
 
-        # 按键/脚本不能为空
-        checkedBtn = self._typeGroup.checkedButton()
-        typeName = self._btnTypeMap.get(checkedBtn, "Click")
-
-        if typeName == "Script":
-            if not self.ui.scriptCombo.currentText().strip():
-                valid = False
-        else:
-            if not self.ui.buttonCombo.currentText().strip():
-                self.ui.buttonCombo.setProperty("hasError", True)
-                _polishWidget(self.ui.buttonCombo)
-                valid = False
+        # 脚本不能为空
+        if not self.ui.scriptCombo.currentText().strip():
+            valid = False
 
         return valid
 
@@ -459,72 +382,19 @@ class EventEditPage(QWidget):
         _polishWidget(self.ui.hotkeyInput)
         self.ui.hotkeyInput.setPlaceholderText(self.tr("Click here, then press a key combination..."))
 
-        self.ui.buttonCombo.setProperty("hasError", False)
-        _polishWidget(self.ui.buttonCombo)
-
     def _markDirty(self, *_args):
         """标记表单已修改（批量设置期间自动跳过）"""
         if not self._suspendDirtyTracking:
             self._isDirty = True
 
-    def _initButtonComboData(self):
-        """为 buttonCombo 的预设选项设置 itemData（内部值），使其不受翻译影响
-
-        .ui 文件中定义的顺序：index 0 = Left, index 1 = Right
-        显示文本会被 Qt 翻译系统翻译（如 "左键"/"右键"），
-        但 itemData 始终保持英文内部值，供数据层使用。
-        """
-        _BUTTON_DATA = [MOUSE_LEFT, MOUSE_RIGHT]
-        for i, value in enumerate(_BUTTON_DATA):
-            if i < self.ui.buttonCombo.count():
-                self.ui.buttonCombo.setItemData(i, value)
-
-    def _getButtonComboValue(self) -> str:
-        """获取 buttonCombo 的内部值（优先取 itemData，回退到 currentText）
-
-        对于预设的鼠标按钮选项，返回不受翻译影响的内部值（如 "mouse_left"）；
-        对于用户手动输入的键盘按键名，返回输入的文本。
-
-        注意：可编辑 QComboBox 中，用户修改输入框文本但未按回车时，
-        currentIndex 仍指向旧的预设项，currentData() 会返回旧预设值。
-        因此需要额外比较编辑框文本与当前选中项的显示文本是否一致。
-        """
-        idx = self.ui.buttonCombo.currentIndex()
-        data = self.ui.buttonCombo.currentData()
-        editText = self.ui.buttonCombo.currentText().strip()
-
-        if data is not None and idx >= 0:
-            # 当前 index 指向预设项，但编辑框文本可能已被用户修改
-            itemText = self.ui.buttonCombo.itemText(idx)
-            if editText == itemText:
-                # 文本与预设项一致，返回内部值
-                return str(data)
-            # 文本已被用户修改（自定义输入但未按回车），返回实际输入
-            return editText
-
-        # 用户手动输入的键盘按键，无 itemData，直接返回文本
-        return editText
-
-    def _setButtonComboValue(self, value: str):
-        """根据内部值设置 buttonCombo 的选中项
-
-        优先通过 itemData 匹配预设选项；若未找到，则作为自定义文本设置。
-        """
-        idx = self.ui.buttonCombo.findData(value)
-        if idx >= 0:
-            self.ui.buttonCombo.setCurrentIndex(idx)
-        else:
-            # 自定义键盘按键名，直接设置文本
-            self.ui.buttonCombo.setCurrentText(value)
-
     # ---- 脚本参数动态渲染 ----
 
     def _onScriptChanged(self, index: int):
         """脚本选择变更回调：重新渲染参数控件"""
-        self._refreshScriptParams()
+        self.refreshScriptParams()
         self._markDirty()
 
-    def _refreshScriptParams(self):
+    def refreshScriptParams(self):
         """根据当前选中的脚本，提取参数声明并动态渲染参数控件"""
         scriptName = self.ui.scriptCombo.currentText().strip()
         if not scriptName:

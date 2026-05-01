@@ -41,7 +41,7 @@ class EventCard(QFrame):
         """填充卡片显示数据
 
         Args:
-            eventType: 事件类型 (Click/Press/Multi/Script)
+            eventType: 事件类型 (Toggle/Hold)
             hotkey: 热键文本 (如 "Ctrl+F1")
             target: 按键或脚本名
             scope: 范围摘要

@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
 )
 
 from core import common, logger
+from core.scripts import is_builtin
 from views.constants import PageIndex
 from views.script_edit_page import ScriptEditPage
 from views.script_list_page import ScriptListPage
@@ -89,6 +90,18 @@ class ScriptController:
 
         name = name.strip()
 
+        # 禁止内置脚本命名风格
+        if name.startswith("__"):
+            QMessageBox.warning(
+                parent,
+                QCoreApplication.translate("ScriptController", "Reserved Name"),
+                QCoreApplication.translate(
+                    "ScriptController",
+                    "Script names starting with '__' are reserved for built-in scripts."
+                ),
+            )
+            return
+
         # 校验名称合法性
         if not _VALID_NAME_RE.match(name):
             QMessageBox.warning(
@@ -135,12 +148,16 @@ class ScriptController:
         self.goToEditScript(filePath)
 
     def onCopyScript(self, filePath: str):
-        """复制脚本文件"""
+        """复制脚本文件（内置脚本不可复制）"""
         if not os.path.isfile(filePath):
             return
 
-        dirPath = os.path.dirname(filePath)
         baseName = os.path.splitext(os.path.basename(filePath))[0]
+        # 内置脚本复制后去掉 __ 前缀后缀（__click__ → click）
+        if is_builtin(baseName):
+            baseName = baseName[2:-2]
+
+        dirPath = os.path.dirname(filePath)
 
         # 生成不冲突的副本名称
         copyName = f"{baseName}_copy"
@@ -173,6 +190,10 @@ class ScriptController:
             return
 
         name = os.path.splitext(os.path.basename(filePath))[0]
+
+        # 内置脚本不可删除
+        if is_builtin(name):
+            return
         parent = self._scriptListPage
 
         reply = QMessageBox.question(

@@ -1,13 +1,12 @@
 import fnmatch
 import keyboard
-import sys
 import threading
 
 from core import config
 from core import foreground_listener
-from core import input_backend
 from core import logger
 from core.scripts import scripts
+
 
 def _ensure_keyboard_listening():
     # 检查 keyboard 库的 listening_thread 是否存活，若已死亡则强制恢复。
@@ -27,137 +26,66 @@ def _ensure_keyboard_listening():
             logger.app.warning('keyboard listening_thread is dead, forcing recovery')
             listener.listening = False
 
-def _wrap_hotkey(callback, hotkey, trigger_on_release):
-    # 统一管理热键触发时机，解决两个问题：
-    # 1. keyboard 库长按热键时会持续触发回调，需要限制为只触发一次
-    # 2. keyboard 库的 trigger_on_release 参数存在 bug
-    #    nonblocking hotkeys 在 KEY_UP 时 _pressed_events 已被清空导致匹配失败
-    #
-    # 为每个键注册持久 hook 追踪释放状态：
-    # - trigger_on_release=False：按下时立即触发回调
-    # - trigger_on_release=True：任意键释放时触发回调
-    keys = [k.strip() for k in hotkey.split('+')]
-    fired = False
 
-    def on_key_release(event):
-        nonlocal fired
-        if event.event_type == keyboard.KEY_UP:
-            # 任意键释放后重置标志位
-            if fired and not all(keyboard.is_pressed(k) for k in keys):
-                if trigger_on_release:
-                    callback()
-                fired = False
+def _hook_combo(on_press, on_release, hotkey):
+    """通用组合键处理：所有键按下时调 on_press，任意键释放时调 on_release。
+
+    Toggle 和 Hold 共用此函数，仅传入的回调不同：
+    - Toggle: on_press=toggle_cb, on_release=None
+    - Hold:   on_press=start_cb, on_release=stop_cb
+    """
+    keys = [k.strip() for k in hotkey.split('+')]
+    started = False
+
+    def on_key_event(event):
+        nonlocal started
+        if event.event_type == keyboard.KEY_DOWN:
+            if not started and all(keyboard.is_pressed(k) for k in keys):
+                started = True
+                if on_press:
+                    on_press()
+        elif event.event_type == keyboard.KEY_UP:
+            if started:
+                started = False
+                if on_release:
+                    on_release()
 
     for key in keys:
-        keyboard.hook_key(key, on_key_release)
+        keyboard.hook_key(key, on_key_event)
 
-    def wrapped_callback():
-        nonlocal fired
-        if fired:
-            return
-        fired = True
-        if not trigger_on_release:
-            callback()
-
-    return wrapped_callback
 
 def start():
-    # keyboard 库的 listening_thread 因 GetMessage 异常退出后 listening 标志仍为 True，
-    # 导致后续 add_hotkey 不会重建线程，热键失效。因此需要一个 workaround 检测并修正此状态不一致。
     _ensure_keyboard_listening()
 
     for event in config.events:
         if not event.enabled:
             continue
-        if event.hotkey == None or event.hotkey == '':
+        if not event.hotkey:
             continue
 
-        callback = callback_factory(event)
-        callback = _wrap_hotkey(callback, event.hotkey, event.trigger_on_release)
+        match event.type:
+            case 'Toggle':
+                on_press, on_release = toggle_factory(event), None
+            case 'Hold':
+                on_press, on_release = hold_factory(event)
+            case _:
+                continue
+        _hook_combo(on_press, on_release, event.hotkey)
 
-        keyboard.add_hotkey(event.hotkey, callback)
 
 def stop():
     keyboard.unhook_all()
     foreground_listener.clear_event_callback_list()
 
+
 def restart():
     stop()
     start()
 
-def callback_factory(event):
+
+def toggle_factory(event):
+    """Toggle 类型：首次热键启动脚本线程，再次热键 set_stop 终止。"""
     parse_scope(event)
-    match event.type:
-        case 'Click':
-            return click_factory(event)
-        case 'Press':
-            return press_factory(event)
-        case 'Multi':
-            return multi_factory(event)
-        case 'Script':
-            return script_factory(event)
-        case _:
-            return lambda: None
-
-def click_factory(event):
-    def callback():
-        if not check_scope(event):
-            return
-        input_backend.click(event.target, *event.position)
-
-    return callback
-
-def press_factory(event):
-    already_down = False
-    def callback():
-        if not check_scope(event):
-            return
-        nonlocal already_down
-        if not already_down:
-            input_backend.down(event.target, *event.position)
-            already_down = True
-        else:
-            input_backend.up(event.target, *event.position)
-            already_down = False
-
-    return callback
-
-def multi_factory(event):
-    ing = False
-    stop = threading.Event()
-    def callback_impl():
-        nonlocal ing, stop
-        ing = True
-        interval = event.interval / 1000
-        clicks = event.clicks if event.clicks >= 0 else sys.maxsize
-        count = 0
-        while not stop.is_set():
-            input_backend.click(event.target, *event.position)
-            count += 1
-            if count >= clicks:
-                break
-            stop.wait(interval)
-        ing = False
-        stop.clear()
-
-    def if_ing_then_stop():
-        nonlocal ing, stop
-        if ing:
-            stop.set()
-        return ing
-
-    def callback():
-        if not check_scope(event):
-            return
-        if if_ing_then_stop():
-            return
-        threading.Thread(target=callback_impl).start()
-
-    foreground_listener.add_event_callback_list(if_ing_then_stop)
-
-    return callback
-
-def script_factory(event):
     script, context = scripts.load_as_function(event)
     thread = None
 
@@ -180,6 +108,31 @@ def script_factory(event):
 
     return callback
 
+
+def hold_factory(event):
+    """Hold 类型：返回 (start_cb, stop_cb)，分别注册到热键按下和释放。"""
+    parse_scope(event)
+    script, context = scripts.load_as_function(event)
+    thread = None
+
+    def start_script():
+        nonlocal thread
+        if not check_scope(event):
+            return
+        if thread and thread.is_alive():
+            return
+        context.clear_stop()
+        thread = threading.Thread(target=script)
+        thread.start()
+
+    def stop_script():
+        nonlocal thread
+        if thread and thread.is_alive():
+            context.set_stop()
+
+    return start_script, stop_script
+
+
 def parse_scope(event):
     _scope = []
     for i in event.scope.split(':', 1):
@@ -191,6 +144,7 @@ def parse_scope(event):
     event._scope = _scope
     event._version = 0
     event._passed = False
+
 
 def check_scope(event):
     process_name, window_title, data_version = foreground_listener.active_window_info()
@@ -206,4 +160,3 @@ def check_scope(event):
     event._passed = passed
 
     return passed
-
