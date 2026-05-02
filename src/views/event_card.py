@@ -8,6 +8,7 @@
 from PySide6.QtCore import Signal, Qt
 from PySide6.QtWidgets import QFrame, QMenu, QWidget
 
+from core.scripts import is_builtin
 from ui.generated.ui_event_card import Ui_EventCard
 from views import _polishWidget
 
@@ -66,6 +67,7 @@ class EventCard(QFrame):
             self.ui.scriptNameLabel.setVisible(True)
         else:
             self.ui.scriptNameLabel.setVisible(False)
+        self.ui.builtinBadgeLabel.setVisible(is_builtin(script_name))
 
         # bottomRow: 范围 · 额外信息
         self.ui.scopeLabel.setText(self.tr("Scope: {scope}").format(scope=scope))

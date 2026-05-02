@@ -20,7 +20,7 @@ from core import common
 from core import event_listener
 from core.config import settings as configSettings
 from core.models import ParamDef, ParamType
-from core.scripts import ScriptCode
+from core.scripts import ScriptCode, is_builtin
 from ui.generated.ui_event_edit_page import Ui_EventEditPage
 from views import _polishWidget, polishInputWidgets
 from views.toggle_switch import ToggleSwitch
@@ -187,10 +187,14 @@ class HtmlDelegate(QStyledItemDelegate):
         fg = option.palette.color(QPalette.ColorRole.Text).name()
         display = index.data(self._DISPLAY_ROLE)
         script = index.data(Qt.ItemDataRole.UserRole)
+        dim = option.palette.color(QPalette.ColorRole.AlternateBase).name()
+        badge = ''
+        if is_builtin(script or ''):
+            label = QCoreApplication.translate("EventEditPage", "Built-in")
+            badge = f' <span style="color:{dim};"> [{label}]</span>'
         if display and script and display != script:
-            dim = option.palette.color(QPalette.ColorRole.AlternateBase).name()
-            return f'<span style="color:{fg};">{display}</span> <span style="color:{dim};">: {script}</span>'
-        return f'<span style="color:{fg};">{index.data(Qt.ItemDataRole.DisplayRole)}</span>'
+            return f'<span style="color:{fg};">{display}</span> <span style="color:{dim};">: {script}</span>{badge}'
+        return f'<span style="color:{fg};">{index.data(Qt.ItemDataRole.DisplayRole)}</span>{badge}'
 
     def paint(self, painter, option, index):
         # 绘制选中/悬停背景（复用原生 QStyle 绘制）

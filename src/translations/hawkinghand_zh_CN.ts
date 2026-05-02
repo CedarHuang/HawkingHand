@@ -20,6 +20,10 @@
         <translation>🗑️  删除</translation>
     </message>
     <message>
+        <source>Built-in</source>
+        <translation>内置</translation>
+    </message>
+    <message>
         <source>Enable/Disable</source>
         <translation>启用/禁用</translation>
     </message>
@@ -37,6 +41,10 @@
     <message>
         <source>Click here, then press a key combination...</source>
         <translation>点击此处，然后按下组合键...</translation>
+    </message>
+    <message>
+        <source>Built-in</source>
+        <translation>内置</translation>
     </message>
     <message>
         <source>Edit Event</source>
@@ -195,6 +203,10 @@ This action cannot be undone.</source>
     <message>
         <source>🗑️  Delete</source>
         <translation>🗑️  删除</translation>
+    </message>
+    <message>
+        <source>Built-in</source>
+        <translation>内置</translation>
     </message>
     <message>
         <source>More actions</source>

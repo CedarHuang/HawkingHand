@@ -557,6 +557,13 @@ QLabel#displayNameLabel {
     font-weight: bold;
 }
 
+/* 内置脚本标识 */
+QLabel#builtinBadgeLabel {
+    font-size: 10px;
+    padding: 1px 5px;
+    border-radius: 4px;
+}
+
 /* 脚本原始名标签 */
 QLabel#scriptNameLabel {
     font-size: 13px;

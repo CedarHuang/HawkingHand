@@ -20,6 +20,10 @@
         <translation></translation>
     </message>
     <message>
+        <source>Built-in</source>
+        <translation></translation>
+    </message>
+    <message>
         <source>Enable/Disable</source>
         <translation></translation>
     </message>
@@ -36,6 +40,10 @@
     </message>
     <message>
         <source>Click here, then press a key combination...</source>
+        <translation></translation>
+    </message>
+    <message>
+        <source>Built-in</source>
         <translation></translation>
     </message>
     <message>
@@ -193,6 +201,10 @@ This action cannot be undone.</source>
     </message>
     <message>
         <source>🗑️  Delete</source>
+        <translation></translation>
+    </message>
+    <message>
+        <source>Built-in</source>
         <translation></translation>
     </message>
     <message>

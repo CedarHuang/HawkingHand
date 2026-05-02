@@ -83,6 +83,13 @@
          </widget>
         </item>
         <item>
+         <widget class="QLabel" name="builtinBadgeLabel">
+          <property name="text">
+           <string>Built-in</string>
+          </property>
+         </widget>
+        </item>
+        <item>
          <spacer name="nameRowSpacer">
           <property name="orientation">
            <enum>Qt::Horizontal</enum>

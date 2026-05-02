@@ -560,6 +560,12 @@ QLabel#displayNameLabel {
     color: #D7DAE0;
 }
 
+/* 内置脚本标识 */
+QLabel#builtinBadgeLabel {
+    color: #6B7380;
+    background-color: #3A404A;
+}
+
 /* 脚本原始名标签 */
 QLabel#scriptNameLabel {
     color: #5C6370;
