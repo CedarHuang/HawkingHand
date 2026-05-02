@@ -11,8 +11,10 @@ from datetime import datetime
 from PySide6.QtCore import Signal, Qt
 from PySide6.QtWidgets import QFrame, QMenu, QWidget
 
+from core.scripts import get_display_name, get_script_info
 from ui.generated.ui_script_card import Ui_ScriptCard
 from views import _polishWidget
+from views.event_edit_page import getLocalizedText
 
 
 class ScriptCard(QFrame):
@@ -60,8 +62,25 @@ class ScriptCard(QFrame):
             filePath: 脚本文件的完整路径
         """
         self._filePath = filePath
-        name = os.path.splitext(os.path.basename(filePath))[0]
-        self.ui.scriptNameLabel.setText(name)
+        script_name = os.path.splitext(os.path.basename(filePath))[0]
+        display_name = get_display_name(script_name)
+        if isinstance(display_name, dict):
+            display_name = getLocalizedText(display_name, fallback=script_name)
+        self.ui.displayNameLabel.setText(display_name)
+        if display_name != script_name:
+            self.ui.scriptNameLabel.setText(f": {script_name}")
+            self.ui.scriptNameLabel.setVisible(True)
+        else:
+            self.ui.scriptNameLabel.setVisible(False)
+        # 脚本描述
+        desc = get_script_info(script_name).get('description')
+        if desc:
+            if isinstance(desc, dict):
+                desc = getLocalizedText(desc)
+            self.ui.scriptDescLabel.setText(desc)
+            self.ui.scriptDescLabel.setVisible(bool(desc))
+        else:
+            self.ui.scriptDescLabel.setVisible(False)
 
         # 获取文件信息
         try:

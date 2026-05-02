@@ -3,6 +3,7 @@ import copy
 import importlib
 import importlib.util
 import inspect
+import json
 import os
 import threading
 import watchdog.events
@@ -34,8 +35,80 @@ def is_builtin(name: str) -> bool:
     """判断脚本名是否为内置脚本。"""
     return name in BUILTIN_SCRIPT_NAMES
 
+
+_script_info_cache: dict[str, dict] = {}
+
+
+def _load_info_cache() -> dict[str, dict]:
+    """从磁盘加载 info 缓存。自动清理已删除脚本的条目、mtime 不匹配的条目。"""
+    cache_path = common.info_cache_path()
+    scripts_dir = common.scripts_path()
+    cache: dict[str, dict] = {}
+    try:
+        with open(cache_path, 'r', encoding='utf-8') as f:
+            raw = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return cache
+    for name, entry in raw.items():
+        filepath = os.path.join(scripts_dir, f'{name}.py')
+        if not os.path.isfile(filepath):
+            continue  # 脚本已删除，自然清理
+        try:
+            if os.path.getmtime(filepath) != entry.get('mtime', 0):
+                continue  # mtime 不匹配，需要重新提取
+        except OSError:
+            continue
+        cache[name] = entry
+    return cache
+
+
+def _save_info_cache():
+    """将当前缓存持久化到磁盘。"""
+    cache_path = common.info_cache_path()
+    try:
+        with open(cache_path, 'w', encoding='utf-8') as f:
+            json.dump(_script_info_cache, f, indent=2, ensure_ascii=False)
+    except OSError:
+        logger.script.error('Failed to save info cache:', exc_info=True)
+
+
+def _cache_info(script_name: str):
+    """提取脚本 info 并写入缓存（内存 + 磁盘）。"""
+    if script_name == '__builtins__':
+        _script_info_cache[script_name] = {'name': script_name, 'description': None}
+        return
+    try:
+        info = ScriptCode.get_by_name(script_name).get_info()
+    except Exception:
+        info = {'name': script_name, 'description': None}
+    # 记录 mtime 用于下次启动比对
+    filepath = os.path.join(common.scripts_path(), f'{script_name}.py')
+    try:
+        info['mtime'] = os.path.getmtime(filepath)
+    except OSError:
+        pass
+    _script_info_cache[script_name] = info
+    _save_info_cache()
+
+
+def get_script_info(script_name: str) -> dict:
+    """获取脚本的 info 字典（含 name 和 description）。磁盘缓存 + mtime 校验。"""
+    if script_name not in _script_info_cache:
+        _cache_info(script_name)
+    return _script_info_cache[script_name]
+
+
+def get_display_name(script_name: str) -> str | dict:
+    """获取脚本展示名。与 get_script_info 共享缓存。"""
+    info = get_script_info(script_name)
+    name = info.get('name')
+    if name is not None and name != script_name:
+        return name
+    return script_name
+
+
 def ensure_builtin_scripts():
-    """将内置脚本源文件复制到用户 scripts 目录。"""
+    """将内置脚本源文件复制到用户 scripts 目录。仅内容不同时覆写，避免 mtime 刷新触发 info 提取。"""
     src_dir = common.builtins_src_dir()
     if not os.path.isdir(src_dir):
         return
@@ -46,6 +119,12 @@ def ensure_builtin_scripts():
         try:
             with open(src, 'r', encoding='utf-8') as f:
                 code = f.read()
+            try:
+                with open(dst, 'r', encoding='utf-8') as f:
+                    if f.read() == code:
+                        continue
+            except FileNotFoundError:
+                pass
             with open(dst, 'w', encoding='utf-8') as f:
                 f.write(code)
         except OSError:
@@ -53,7 +132,7 @@ def ensure_builtin_scripts():
 
 
 class ScriptCode:
-    instances = {
+    instances: dict[str, 'ScriptCode'] = {
         # key: script path
         # value: ScriptCode instance
     }
@@ -92,8 +171,11 @@ class ScriptCode:
         except:
             logger.script.error(f'Error reading script file: "{self.path}":', exc_info=True)
 
+    def get_info(self) -> dict:
+        return ExtractContext().run_info_with_timeout(self)
+
     def get_param_defs(self) -> list[ParamDef]:
-        return ExtractContext().run_with_timeout(self)
+        return ExtractContext().run_params_with_timeout(self)
 
 
 class ScriptObserver(watchdog.events.FileSystemEventHandler):
@@ -127,6 +209,9 @@ class ScriptObserver(watchdog.events.FileSystemEventHandler):
         self._known_mtimes[path] = mtime
 
         instance.reload()
+        if instance.name in _script_info_cache:
+            del _script_info_cache[instance.name]
+            _save_info_cache()
         logger.script.info(f'File "{path}" has been modified, reload!')
 
         event_listener.restart()
@@ -141,8 +226,8 @@ class ScriptObserver(watchdog.events.FileSystemEventHandler):
         self.observer.join()
         logger.script.debug(f'Stopped observing scripts directory: {common.scripts_path()}')
 
-# 模块加载时立即确保内置脚本存在
-ensure_builtin_scripts()
+# 模块加载时初始化缓存
+_script_info_cache.update(_load_info_cache())
 script_observer = ScriptObserver()
 
 
@@ -252,32 +337,43 @@ class ScriptContext(dict):
 
 
 class ExtractContext(ScriptContext):
+    MODE_INFO = 'info'
+    MODE_PARAMS = 'params'
+
     def __init__(self):
-        super().__init__(None)
         self._script_name = ''
+        self._mode = ''
+        super().__init__(None)
 
     def create_restricted_builtins(self):
         restricted_builtins = super().create_restricted_builtins()
+
+        # 非活跃模式的 API 替换为 noop，活跃模式的保留（由 run_*_with_timeout 注入）
+        if self._mode == self.MODE_INFO:
+            restricted_builtins['params'] = lambda name, default, /, **_: default
+        else:
+            restricted_builtins['info'] = lambda name=None, description=None: None
 
         def _make_disabled_handler(name):
             def handler(*args, **kwargs):
                 logger.script.debug(
                     f'Script <{self._script_name}> called disabled builtin <{name}> '
-                    f'in param extraction sandbox, script execution terminated'
+                    f'in <{self._mode}> extraction sandbox, script execution terminated'
                 )
                 return restricted_builtins['exit']()
             return handler
 
         for key in restricted_builtins:
-            if key in ('__import__', 'exit', 'quit'):
+            if key in ('__import__', 'exit', 'quit', 'params', 'info'):
                 continue
             restricted_builtins[key] = _make_disabled_handler(key)
 
         return restricted_builtins
 
-    def run_with_timeout(self, script_code: ScriptCode) -> list[ParamDef]:
+    def run_params_with_timeout(self, script_code: ScriptCode) -> list[ParamDef]:
+        """PARAMS 模式：只录制 params() 调用，info() 为 noop。"""
+        self._mode = self.MODE_PARAMS
         self._script_name = script_code.name
-        # param_defs 由 _extract_params 闭包捕获，运行后通过 self 访问
         param_defs: list[ParamDef] = []
         self['params'] = self._create_extract_params(param_defs)
         self['init'] = api._create_init()
@@ -292,9 +388,31 @@ class ExtractContext(ScriptContext):
 
         extract_thread = threading.Thread(target=_run_extract, daemon=True)
         extract_thread.start()
-        extract_thread.join(timeout=0.5)  # 500ms 超时
+        extract_thread.join(timeout=0.5)
 
         return list(param_defs)
+
+    def run_info_with_timeout(self, script_code: ScriptCode) -> dict:
+        """INFO 模式：只录制 info() 调用，params() 为 noop。"""
+        self._mode = self.MODE_INFO
+        self._script_name = script_code.name
+        info: dict = {}
+        self['info'] = self._create_extract_info(info)
+        self['init'] = api._create_init()
+
+        def _run_extract():
+            try:
+                exec(script_code.code, self)
+            except api.ScriptExit:
+                pass
+            except Exception as e:
+                logger.script.warning(f'Script <{script_code.name}> extract info failed: {e}')
+
+        extract_thread = threading.Thread(target=_run_extract, daemon=True)
+        extract_thread.start()
+        extract_thread.join(timeout=0.5)
+
+        return dict(info)
 
     @staticmethod
     def _create_extract_params(param_defs: list[ParamDef]):
@@ -321,6 +439,20 @@ class ExtractContext(ScriptContext):
             return effective_default
 
         return _extract_params
+
+    @staticmethod
+    def _create_extract_info(info: dict):
+        recorded = False
+
+        def _extract_info(name=None, description=None):
+            nonlocal recorded
+            if not recorded:
+                info['name'] = name
+                info['description'] = description
+                recorded = True
+            return None
+
+        return _extract_info
 
 
 class Scripts:

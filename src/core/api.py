@@ -359,6 +359,22 @@ def _create_context(event: models.Event):
         raise ScriptExit(f"Script exited with code {code}", code)
 
     @register()
+    def info(name=None, description=None):
+        """声明脚本展示信息。
+
+        在脚本中调用此函数声明脚本的显示名称和描述，
+        系统会在脚本列表页和事件编辑下拉框中展示这些信息。
+
+        Args:
+            name (str | dict[str, str] | None): 脚本显示名称，支持多语言映射。
+            description (str | dict[str, str] | None): 脚本描述，支持多语言映射。
+
+        Returns:
+            dict: 包含 name 和 description 的字典。
+        """
+        return {'name': name, 'description': description}
+
+    @register()
     def params(name, default, /, *, label=None, description=None, options=None, type=None):
         """声明脚本可配置参数并同时获取参数值。
 

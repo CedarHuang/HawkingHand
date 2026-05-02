@@ -8,12 +8,13 @@
 import os
 
 import keyboard
-from PySide6.QtCore import Signal, QEvent, QObject, QCoreApplication, QLocale
+from PySide6.QtCore import Signal, QEvent, QObject, QCoreApplication, QLocale, Qt
+from PySide6.QtGui import QTextDocument, QPalette
 from PySide6.QtWidgets import (
     QWidget, QButtonGroup, QMessageBox,
     QSizePolicy, QSpacerItem,
     QSpinBox, QDoubleSpinBox, QLineEdit, QComboBox,
-    QLabel, QHBoxLayout, QFrame,
+    QLabel, QHBoxLayout, QFrame, QStyledItemDelegate, QStyle,
 )
 from core import common
 from core import event_listener
@@ -39,7 +40,7 @@ def prettifyHotkey(hotkey: str) -> str:
     return "+".join(part.strip().capitalize() for part in normalized.split("+"))
 
 
-def _getLocalizedText(text: str | dict[str, str] | None, fallback: str = "") -> str:
+def getLocalizedText(text: str | dict[str, str] | None, fallback: str = "") -> str:
     """从多语言文本中获取当前语言的文本。
 
     语言回退链：用户配置 → 系统语言 → 英文 → 首个条目 → fallback
@@ -173,6 +174,51 @@ class HotkeyRecorder(QObject):
                 self._stopRecording()
 
 
+class HtmlDelegate(QStyledItemDelegate):
+    """使用 HTML 渲染 Combo 下拉列表项，同时保留原生的悬停/选中样式。"""
+
+    _DISPLAY_ROLE = Qt.ItemDataRole.UserRole + 1
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._doc = QTextDocument()
+
+    def _html(self, option, index) -> str:
+        fg = option.palette.color(QPalette.ColorRole.Text).name()
+        display = index.data(self._DISPLAY_ROLE)
+        script = index.data(Qt.ItemDataRole.UserRole)
+        if display and script and display != script:
+            dim = option.palette.color(QPalette.ColorRole.AlternateBase).name()
+            return f'<span style="color:{fg};">{display}</span> <span style="color:{dim};">: {script}</span>'
+        return f'<span style="color:{fg};">{index.data(Qt.ItemDataRole.DisplayRole)}</span>'
+
+    def paint(self, painter, option, index):
+        # 绘制选中/悬停背景（复用原生 QStyle 绘制）
+        painter.save()
+        style = option.widget.style() if option.widget else None
+        if style:
+            style.drawControl(QStyle.ControlElement.CE_ItemViewItem, option, painter, option.widget)
+        painter.restore()
+
+        self._doc.setDefaultFont(option.font)
+        self._doc.setHtml(self._html(option, index))
+        self._doc.setTextWidth(option.rect.width())
+        # 文本区域与原生 item 对齐
+        textRect = option.rect.adjusted(4, 2, -4, -2)
+        painter.save()
+        painter.translate(textRect.topLeft())
+        painter.setClipRect(textRect.translated(-textRect.topLeft()))
+        self._doc.drawContents(painter)
+        painter.restore()
+
+    def sizeHint(self, option, index):
+        self._doc.setDefaultFont(option.font)
+        self._doc.setHtml(self._html(option, index))
+        size = self._doc.size().toSize()
+        size.setHeight(max(size.height() + 4, 28))
+        return size
+
+
 class EventEditPage(QWidget):
     """事件编辑页面"""
 
@@ -292,7 +338,7 @@ class EventEditPage(QWidget):
         # 设置脚本选择
         scriptName = data.get("script", "__click__")
         self._scriptArgsToRestore = data.get("script_args")
-        idx = self.ui.scriptCombo.findText(scriptName)
+        idx = self.ui.scriptCombo.findData(scriptName)
         if idx >= 0:
             self.ui.scriptCombo.blockSignals(True)
             self.ui.scriptCombo.setCurrentIndex(idx)
@@ -304,17 +350,27 @@ class EventEditPage(QWidget):
         self._isDirty = False
         self._suspendDirtyTracking = False
 
-    def setScriptList(self, scripts: list[str]):
+    def setScriptList(self, scripts: list[tuple[str, str]]):
         """设置脚本下拉列表
 
         Args:
-            scripts: 脚本名称列表（不含 .py 后缀）
+            scripts: (script_name, display_name) 元组列表
         """
-        # 阻塞信号，避免 clear/addItems 过程中 currentIndex 变化
-        # 触发 _onScriptChanged → refreshScriptParams 对第一个脚本做无意义的参数提取
         self.ui.scriptCombo.blockSignals(True)
         self.ui.scriptCombo.clear()
-        self.ui.scriptCombo.addItems(scripts)
+        if not hasattr(self, '_htmlDelegate'):
+            self._htmlDelegate = HtmlDelegate(self.ui.scriptCombo)
+            self.ui.scriptCombo.setItemDelegate(self._htmlDelegate)
+        for script_name, display_name in scripts:
+            if isinstance(display_name, dict):
+                display_name = getLocalizedText(display_name, fallback=script_name)
+            if display_name != script_name:
+                plain = f'{display_name} : {script_name}'
+            else:
+                plain = display_name
+            idx = self.ui.scriptCombo.count()
+            self.ui.scriptCombo.addItem(plain, script_name)
+            self.ui.scriptCombo.setItemData(idx, display_name, HtmlDelegate._DISPLAY_ROLE)
         self.ui.scriptCombo.blockSignals(False)
 
     # ---- 内部方法 ----
@@ -351,7 +407,7 @@ class EventEditPage(QWidget):
             "type": typeName,
             "hotkey": self.ui.hotkeyInput.text().strip(),
             "scope": self.ui.scopeInput.text().strip(),
-            "script": self.ui.scriptCombo.currentText(),
+            "script": self.ui.scriptCombo.currentData(),
             "script_args": self._collectScriptArgs(),
         }
 
@@ -371,7 +427,7 @@ class EventEditPage(QWidget):
             valid = False
 
         # 脚本不能为空
-        if not self.ui.scriptCombo.currentText().strip():
+        if not self.ui.scriptCombo.currentData():
             valid = False
 
         return valid
@@ -396,7 +452,7 @@ class EventEditPage(QWidget):
 
     def refreshScriptParams(self):
         """根据当前选中的脚本，提取参数声明并动态渲染参数控件"""
-        scriptName = self.ui.scriptCombo.currentText().strip()
+        scriptName = self.ui.scriptCombo.currentData() or ""
         if not scriptName:
             self._clearScriptParams()
             self.ui.scriptParamsContainer.setVisible(False)
@@ -470,7 +526,7 @@ class EventEditPage(QWidget):
         hLayout.setSpacing(12)
 
         # 标签：与 .ui 中的 fieldLabel 一致（role + minWidth）
-        labelText = _getLocalizedText(paramDef.label, fallback=paramDef.name)
+        labelText = getLocalizedText(paramDef.label, fallback=paramDef.name)
         label = QLabel(labelText)
         label.setMinimumWidth(60)
         label.setProperty("role", "fieldLabel")
@@ -490,7 +546,7 @@ class EventEditPage(QWidget):
             hLayout.addWidget(widget, 1)
 
         # 描述文本作为 tooltip，而非独立标签，保持行布局一致性
-        descText = _getLocalizedText(paramDef.description)
+        descText = getLocalizedText(paramDef.description)
         if descText:
             label.setToolTip(descText)
             widget.setToolTip(descText)
@@ -539,7 +595,7 @@ class EventEditPage(QWidget):
             for key, val in options.items():
                 if isinstance(val, dict):
                     # 多语言：val 是 {lang: text}
-                    displayText = _getLocalizedText(val, fallback=str(key))
+                    displayText = getLocalizedText(val, fallback=str(key))
                 else:
                     # 单语言映射
                     displayText = str(val)

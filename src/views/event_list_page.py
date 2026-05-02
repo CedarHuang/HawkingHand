@@ -7,7 +7,7 @@
 
 from PySide6.QtCore import Signal, Qt, QPoint, QTimer
 from PySide6.QtWidgets import (
-    QWidget, QSpacerItem, QSizePolicy, QMessageBox, QFrame,
+    QWidget, QSpacerItem, QSizePolicy, QMessageBox, QFrame, QLabel,
 )
 
 from ui.generated.ui_event_list_page import Ui_EventListPage
@@ -99,15 +99,16 @@ class EventListPage(QWidget):
 
         self._updateEmptyState()
 
-    def addCard(self, eventType: str, hotkey: str, target: str,
-                scope: str, extra: str = "", enabled: bool = True) -> EventCard:
+    def addCard(self, eventType: str, hotkey: str, display_name: str,
+                script_name: str = "", scope: str = "*",
+                extra: str = "", enabled: bool = True) -> EventCard:
         """添加一张事件卡片
 
         Returns:
             创建的 EventCard 实例
         """
         card = EventCard(self)
-        card.setEventData(eventType, hotkey, target, scope, extra, enabled)
+        card.setEventData(eventType, hotkey, display_name, script_name, scope, extra, enabled)
 
         index = len(self._cards)
         self._cards.append(card)
@@ -159,8 +160,8 @@ class EventListPage(QWidget):
             self._bottomSpacer = None
 
         # 重新添加所有卡片
-        for eventType, hotkey, target, scope, extra, enabled in cardDataList:
-            self.addCard(eventType, hotkey, target, scope, extra, enabled)
+        for data in cardDataList:
+            self.addCard(*data)
 
         # 最终统一更新空状态
         self._updateEmptyState()
@@ -238,7 +239,6 @@ class EventListPage(QWidget):
         self._dragGhost.setWindowOpacity(0.7)
 
         # 将截图绘制到幽灵控件上
-        from PySide6.QtWidgets import QLabel
         ghostLabel = QLabel(self._dragGhost)
         ghostLabel.setPixmap(pixmap)
         ghostLabel.setFixedSize(pixmap.size())

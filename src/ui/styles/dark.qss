@@ -219,11 +219,6 @@ QLabel#arrowLabel {
     color: #5C6370;
 }
 
-/* 按键/脚本名 */
-QLabel#targetLabel {
-    color: #ABB2BF;
-}
-
 /* 范围 & 额外信息 */
 QLabel#scopeLabel,
 QLabel#extraInfoLabel {
@@ -560,9 +555,24 @@ QFrame#ScriptCard:hover {
     background-color: #313640;
 }
 
-/* 脚本名称标签 */
-QLabel#scriptNameLabel {
+/* 脚本展示名标签 */
+QLabel#displayNameLabel {
     color: #D7DAE0;
+}
+
+/* 脚本原始名标签 */
+QLabel#scriptNameLabel {
+    color: #5C6370;
+}
+
+/* 下拉框脚本原始名颜色（通过 alternate-background-color → QPalette 传递） */
+QComboBox#scriptCombo QAbstractItemView {
+    alternate-background-color: #5C6370;
+}
+
+/* 脚本描述标签 */
+QLabel#scriptDescLabel {
+    color: #5C6370;
 }
 
 /* 文件信息标签 */

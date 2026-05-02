@@ -36,16 +36,18 @@ class EventCard(QFrame):
 
     # ---- 数据填充 ----
 
-    def setEventData(self, eventType: str, hotkey: str, target: str,
-                     scope: str, extra: str = "", enabled: bool = True):
+    def setEventData(self, eventType: str, hotkey: str, display_name: str,
+                     script_name: str = "", scope: str = "*",
+                     extra: str = "", enabled: bool = True):
         """填充卡片显示数据
 
         Args:
             eventType: 事件类型 (Toggle/Hold)
             hotkey: 热键文本 (如 "Ctrl+F1")
-            target: 按键或脚本名
+            display_name: 脚本展示名
+            script_name: 脚本原始名（与展示名不同时显示）
             scope: 范围摘要
-            extra: 额外信息 (如位置、频率等)
+            extra: 额外信息
             enabled: 是否启用
         """
         # 设置类型标签和颜色条的动态属性（驱动 QSS 颜色）
@@ -56,9 +58,16 @@ class EventCard(QFrame):
         self.ui.typeColorBar.setProperty("eventType", eventType)
         _polishWidget(self.ui.typeColorBar)
 
-        # 填充文字
+        # topRow: 热键 → 展示名
         self.ui.hotkeyLabel.setText(hotkey)
-        self.ui.targetLabel.setText(target)
+        self.ui.displayNameLabel.setText(display_name)
+        if script_name and script_name != display_name:
+            self.ui.scriptNameLabel.setText(f": {script_name}")
+            self.ui.scriptNameLabel.setVisible(True)
+        else:
+            self.ui.scriptNameLabel.setVisible(False)
+
+        # bottomRow: 范围 · 额外信息
         self.ui.scopeLabel.setText(self.tr("Scope: {scope}").format(scope=scope))
         self.ui.extraInfoLabel.setText(extra)
 

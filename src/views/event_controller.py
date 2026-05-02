@@ -14,8 +14,9 @@ from PySide6.QtWidgets import QStackedWidget, QPushButton
 from core import common
 from core.config import events as configEvents
 from core.models import Event, ScriptParams
+from core.scripts import get_display_name
 from views.constants import PageIndex
-from views.event_edit_page import EventEditPage
+from views.event_edit_page import EventEditPage, getLocalizedText
 from views.event_list_page import EventListPage
 
 
@@ -61,32 +62,35 @@ class EventController:
         """将 Event 对象转换为卡片显示所需的参数元组
 
         Returns:
-            (eventType, hotkey, target, scope, extra, enabled)
+            (eventType, hotkey, display_name, script_name, scope, extra, enabled)
         """
         eventType = event.type or "Toggle"
         hotkey = event.hotkey or ""
-        target = event.target or ""
+        script_name = event.target or ""
+        display_name = get_display_name(script_name)
+        if isinstance(display_name, dict):
+            display_name = getLocalizedText(display_name, fallback=script_name)
         scope = event.scope or "*"
         enabled = event.enabled
         extra = ""
 
-        return eventType, hotkey, target, scope, extra, enabled
+        return eventType, hotkey, display_name, script_name, scope, extra, enabled
 
     @staticmethod
-    def _scanScripts() -> list[str]:
-        """扫描 scripts 目录，返回脚本名称列表（不含 .py 后缀）。__builtins__ 不显示。"""
+    def _scanScripts() -> list[tuple[str, str]]:
+        """扫描 scripts 目录，返回 (script_name, display_name) 列表。__builtins__ 不显示。"""
         scriptsDir = common.scripts_path()
         if not os.path.isdir(scriptsDir):
             return []
-        scripts = []
+        names = []
         for f in glob.glob(os.path.join(scriptsDir, "*.py")):
             name = os.path.splitext(os.path.basename(f))[0]
             if name == "__builtins__":
                 continue
-            scripts.append(name)
+            names.append(name)
         # _ 开头脚本排最前，其余按字母序
-        scripts.sort(key=lambda n: (not n.startswith("_"), n.lower()))
-        return scripts
+        names.sort(key=lambda n: (not n.startswith("_"), n.lower()))
+        return [(n, get_display_name(n)) for n in names]
 
     # ---- 页面导航 ----
 

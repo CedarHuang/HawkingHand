@@ -10,12 +10,6 @@
     <height>56</height>
    </rect>
   </property>
-  <property name="minimumSize">
-   <size>
-    <width>0</width>
-    <height>56</height>
-   </size>
-  </property>
   <property name="frameShape">
    <enum>QFrame::StyledPanel</enum>
   </property>
@@ -55,7 +49,7 @@
     <widget class="QFrame" name="infoFrame">
      <layout class="QVBoxLayout" name="infoLayout">
       <property name="spacing">
-       <number>2</number>
+       <number>6</number>
       </property>
       <property name="leftMargin">
        <number>0</number>
@@ -70,9 +64,43 @@
        <number>0</number>
       </property>
       <item>
-       <widget class="QLabel" name="scriptNameLabel">
+       <layout class="QHBoxLayout" name="nameRowLayout">
+        <property name="spacing">
+         <number>4</number>
+        </property>
+        <item>
+         <widget class="QLabel" name="displayNameLabel">
+          <property name="text">
+           <string notr="true">my_script</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLabel" name="scriptNameLabel">
+          <property name="text">
+           <string notr="true">__click__</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <spacer name="nameRowSpacer">
+          <property name="orientation">
+           <enum>Qt::Horizontal</enum>
+          </property>
+          <property name="sizeHint" stdset="0">
+           <size>
+            <width>40</width>
+            <height>20</height>
+           </size>
+          </property>
+         </spacer>
+        </item>
+       </layout>
+      </item>
+      <item>
+       <widget class="QLabel" name="scriptDescLabel">
         <property name="text">
-         <string notr="true">my_script</string>
+         <string notr="true"></string>
         </property>
        </widget>
       </item>

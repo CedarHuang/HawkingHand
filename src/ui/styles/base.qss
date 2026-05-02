@@ -232,11 +232,6 @@ QLabel#arrowLabel {
     font-size: 12px;
 }
 
-/* 按键/脚本名标签 */
-QLabel#targetLabel {
-    font-size: 13px;
-}
-
 /* 范围标签 */
 QLabel#scopeLabel {
     font-size: 11px;
@@ -556,10 +551,20 @@ QFrame#ScriptCard {
     border: 1px solid transparent;
 }
 
-/* 脚本名称标签 */
-QLabel#scriptNameLabel {
+/* 脚本展示名标签 */
+QLabel#displayNameLabel {
     font-size: 13px;
     font-weight: bold;
+}
+
+/* 脚本原始名标签 */
+QLabel#scriptNameLabel {
+    font-size: 13px;
+}
+
+/* 脚本描述标签 */
+QLabel#scriptDescLabel {
+    font-size: 11px;
 }
 
 /* 文件信息标签 */

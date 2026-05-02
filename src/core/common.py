@@ -9,6 +9,7 @@ scripts_name = 'scripts'
 builtins_name = '__builtins__.py'
 event_config_name = 'event.json'
 settings_config_name = 'settings.json'
+info_cache_name = 'info_cache.json'
 
 def is_frozen():
     return '__compiled__' in globals()
@@ -50,6 +51,9 @@ def event_config_path():
 
 def settings_config_path():
     return os.path.join(config_path(), settings_config_name)
+
+def info_cache_path():
+    return os.path.join(scripts_path(), info_cache_name)
 
 mkdir_if_not_exists(config_path())
 mkdir_if_not_exists(scripts_path())
