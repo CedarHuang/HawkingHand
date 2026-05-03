@@ -143,7 +143,7 @@ class EventListPage(QWidget):
         """批量重建所有卡片，保持滚动位置不变
 
         Args:
-            cardDataList: 每个元素为 (eventType, hotkey, target, scope, extra, enabled) 元组
+            cardDataList: 每个元素为 (eventType, hotkey, script, scope, extra, enabled) 元组
         """
         # 记住当前滚动位置
         scrollBar = self.ui.scrollArea.verticalScrollBar()

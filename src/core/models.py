@@ -93,7 +93,7 @@ class ScriptParams:
 class Event:
     type: str = 'Toggle'
     hotkey: str = ''
-    target: str = '__click__'
+    script: str = '__click__'
     scope: str = '*'
     enabled: bool = True
     params: ScriptParams = field(default_factory=ScriptParams)

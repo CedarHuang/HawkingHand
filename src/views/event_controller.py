@@ -66,7 +66,7 @@ class EventController:
         """
         eventType = event.type or "Toggle"
         hotkey = event.hotkey or ""
-        script_name = event.target or ""
+        script_name = event.script or ""
         display_name = get_display_name(script_name)
         if isinstance(display_name, dict):
             display_name = getLocalizedText(display_name, fallback=script_name)
@@ -122,7 +122,7 @@ class EventController:
             "type": event.type or "Toggle",
             "hotkey": event.hotkey or "",
             "scope": event.scope or "*",
-            "script": event.target or "__click__",
+            "script": event.script or "__click__",
         }
         if event.params.script_args:
             formData["script_args"] = event.params.script_args
@@ -151,7 +151,7 @@ class EventController:
         event = Event(
             type=eventType,
             hotkey=hotkey,
-            target=data.get("script", ""),
+            script=data.get("script", ""),
             scope=scopeVal,
             enabled=enabled,
             params=ScriptParams(script_args=data.get("script_args", {})),

@@ -477,7 +477,7 @@ class Scripts:
         pass
 
     def load_as_function(self, event):
-        script_name = event.target
+        script_name = event.script
         script_code = ScriptCode.get_by_name(script_name)
         script_context = ScriptContext(copy.deepcopy(event))
 
