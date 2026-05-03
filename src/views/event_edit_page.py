@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
 )
 from core import common
 from core import event_listener
+from core import logger
 from core.config import settings as configSettings
 from core.models import ParamDef, ParamType
 from core.scripts import ScriptCode, is_builtin
@@ -103,6 +104,10 @@ class HotkeyRecorder(QObject):
 
         # 设为只读，防止用户直接输入
         lineEdit.setReadOnly(True)
+        # 设置占位提示文本
+        lineEdit.setPlaceholderText(
+            QCoreApplication.translate("EventEditPage", "Click here, then press a key combination...")
+        )
         # 安装事件过滤器，拦截鼠标点击和焦点事件
         lineEdit.installEventFilter(self)
 
@@ -271,6 +276,7 @@ class EventEditPage(QWidget):
         # ---- 脚本参数动态渲染 ----
         self._currentParamDefs: list[ParamDef] = []  # 当前脚本的参数声明列表
         self._paramWidgets: dict[str, QWidget] = {}  # 参数名 → 控件的映射
+        self._paramRows: dict[str, QFrame] = {}      # 参数名 → 行容器的映射
         self._scriptArgsToRestore: dict | None = None  # 待还原的脚本参数值
 
         # ---- 修饰输入控件（滚轮过滤 + 弹出圆角修复）----
@@ -500,6 +506,25 @@ class EventEditPage(QWidget):
             self._restoreScriptArgs(self._scriptArgsToRestore)
             self._scriptArgsToRestore = None
 
+        # 连接 switch 源控件信号并应用初始可见性
+        for pd in self._currentParamDefs:
+            if pd.switch_cases:
+                source_name = pd.name
+                source_widget = self._paramWidgets.get(source_name)
+                if isinstance(source_widget, QComboBox):
+                    source_widget.currentIndexChanged.connect(
+                        lambda _idx, n=source_name: self._updateSwitchVisibility(n)
+                    )
+                elif isinstance(source_widget, ToggleSwitch):
+                    source_widget.toggled.connect(
+                        lambda *a, n=source_name: self._updateSwitchVisibility(n)
+                    )
+                logger.script.debug(
+                    f'Switch connected: source={source_name!r}, cases={pd.switch_cases!r}'
+                )
+                self._updateSwitchVisibility(source_name)
+                break
+
     def _clearScriptParams(self):
         """清除所有动态创建的脚本参数控件"""
         layout = self.ui.scriptParamsLayout
@@ -510,6 +535,40 @@ class EventEditPage(QWidget):
                 widget.deleteLater()
         self._currentParamDefs = []
         self._paramWidgets = {}
+        self._paramRows = {}
+
+    def _updateSwitchVisibility(self, source_name=None):
+        """根据源参数的当前值更新各行可见性。"""
+        for pd in self._currentParamDefs:
+            if pd.switch_cases:
+                if source_name is not None and pd.name != source_name:
+                    continue
+                source_widget = self._paramWidgets.get(pd.name)
+                current_value = None
+                if isinstance(source_widget, QComboBox):
+                    current_value = source_widget.currentData()
+                    if current_value is None:
+                        current_value = source_widget.currentText()
+                elif isinstance(source_widget, ToggleSwitch):
+                    current_value = source_widget.isChecked()
+                if current_value is None:
+                    continue
+                visible_params = pd.switch_cases.get(current_value, [])
+                # 收集所有参与 switch 的参数名（未参与者始终可见，不受影响）
+                all_switched: set[str] = set()
+                for names in pd.switch_cases.values():
+                    all_switched.update(names)
+                for name, row in self._paramRows.items():
+                    if name == pd.name:
+                        continue
+                    if name in all_switched:
+                        row.setVisible(name in visible_params)
+                hidden = [n for n in all_switched if n not in visible_params]
+                logger.script.debug(
+                    f'Switch updated: {pd.name!r}={current_value!r} '
+                    f'-> show={visible_params}, hide={hidden}'
+                )
+                return
 
     def _createParamRow(self, paramDef: ParamDef) -> QFrame:
         """根据 ParamDef 创建一个参数行（标签 + 控件）
@@ -539,6 +598,7 @@ class EventEditPage(QWidget):
         # 根据类型创建控件
         widget = self._createParamWidget(paramDef)
         self._paramWidgets[paramDef.name] = widget
+        self._paramRows[paramDef.name] = row
 
         if paramDef.type == ParamType.BOOL:
             # bool 类型：开关在左侧（不加 stretch），右侧加 spacer 推到左边

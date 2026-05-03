@@ -14,7 +14,7 @@ from core import common
 from core import event_listener
 from core import logger
 from core import vision_backend
-from core.models import ParamDef, ParamType
+from core.models import ParamDef, ParamRef, ParamType
 
 
 def _scan_builtin_names() -> frozenset[str]:
@@ -364,7 +364,7 @@ class ExtractContext(ScriptContext):
             return handler
 
         for key in restricted_builtins:
-            if key in ('__import__', 'exit', 'quit', 'params', 'info'):
+            if key in ('__import__', 'exit', 'quit', 'params', 'info', 'switch'):
                 continue
             restricted_builtins[key] = _make_disabled_handler(key)
 
@@ -375,7 +375,7 @@ class ExtractContext(ScriptContext):
         self._mode = self.MODE_PARAMS
         self._script_name = script_code.name
         param_defs: list[ParamDef] = []
-        self['params'] = self._create_extract_params(param_defs)
+        self.update(self._create_extract_params(param_defs))
         self['init'] = api._create_init()
 
         def _run_extract():
@@ -418,8 +418,8 @@ class ExtractContext(ScriptContext):
     def _create_extract_params(param_defs: list[ParamDef]):
         def _extract_params(name, default, /, *, label=None, description=None, options=None, type=None):
             # 参数不足或 default=None 时忽略该调用
-            if default is None:
-                return default
+            if name is None or default is None:
+                return None
 
             param_type = ParamType(type) if type else ParamType.infer_from(default, options)
 
@@ -427,18 +427,35 @@ class ExtractContext(ScriptContext):
             effective_default = api._effective_default(default, options)
 
             # 同名参数已存在直接返回（与 params() 中 name ∈ script_args 的路径对齐，
-            # 提取沙箱无用户配置，返回 effective_default 作为最佳近似）
+            # 返回 ParamRef 供 switch() 读取 ._name 建立可见性映射）
             for pd in param_defs:
                 if pd.name == name:
-                    return effective_default
+                    return ParamRef(name, effective_default)
 
             param_defs.append(ParamDef(
                 name=name, type=param_type, default=effective_default,
                 label=label, description=description, options=options,
             ))
-            return effective_default
+            return ParamRef(name, effective_default)
 
-        return _extract_params
+        def _extract_switch(source, cases):
+            source_name = getattr(source, '_name', None)
+            if source_name is None:
+                return
+            targets: dict[str, list[str]] = {}
+            for case_value, param_list in cases.items():
+                names = []
+                for p in param_list:
+                    p_name = getattr(p, '_name', None)
+                    if p_name is not None:
+                        names.append(p_name)
+                targets[case_value] = names
+            for pd in param_defs:
+                if pd.name == source_name:
+                    pd.switch_cases = targets
+                    break
+
+        return {'params': _extract_params, 'switch': _extract_switch}
 
     @staticmethod
     def _create_extract_info(info: dict):

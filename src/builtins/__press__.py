@@ -17,26 +17,44 @@ if init():
     info(
         name={"en_US": "Press", "zh_CN": "按住"},
         description={
-            "en_US": "Presses and holds the mouse button. Press again to release.",
-            "zh_CN": "按下并保持鼠标按键，再次按下释放。",
+            "en_US": "Presses and holds a mouse or keyboard button. Press again to release.",
+            "zh_CN": "按下并保持鼠标或键盘按键，再次按下释放。",
         })
 
-    button = params("button", "mouse_left",
-        label={"en_US": "Button", "zh_CN": "按键"},
+    device = params("device", "mouse",
+        label={"en_US": "Device", "zh_CN": "设备"},
+        options={
+            "mouse":    {"en_US": "Mouse",    "zh_CN": "鼠标"},
+            "keyboard": {"en_US": "Keyboard", "zh_CN": "键盘"},
+        })
+
+    mouse_button = params("mouse_button", "mouse_left",
+        label={"en_US": "Mouse Button", "zh_CN": "鼠标按键"},
         options={
             "mouse_left":  {"en_US": "Left",  "zh_CN": "左键"},
             "mouse_right": {"en_US": "Right", "zh_CN": "右键"},
         })
 
+    # HOTKEY 类型：显式指定 type='hotkey'，在事件编辑页渲染热键录制器
+    keyboard_key = params("keyboard_key", "", type="hotkey",
+        label={"en_US": "Keyboard Key", "zh_CN": "键盘按键"})
+
     pos = params("position", [-1, -1],
         label={"en_US": "Position", "zh_CN": "坐标"})
+
+    # switch() 声明参数可见性依赖：根据 device 值切换显示鼠标或键盘参数
+    switch(device, {
+        "mouse":    [mouse_button, pos],
+        "keyboard": [keyboard_key],
+    })
 
     # is_down 在上下文中持久化，多次触发间保持状态
     is_down = False
 
-# 交替执行 down / up
+# 交替执行 down() / up()；键盘按键时 down() / up() 自动忽略坐标
+target = mouse_button if device == "mouse" else keyboard_key
 if is_down:
-    up(button, *pos)
+    up(target, *pos)
 else:
-    down(button, *pos)
+    down(target, *pos)
 is_down = not is_down

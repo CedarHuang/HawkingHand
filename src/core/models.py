@@ -39,6 +39,40 @@ class ParamType(StrEnum):
         return cls.STR
 
 
+class ParamRef:
+    """参数引用代理对象。
+
+    提取沙箱中 params() 返回此类型，携带参数名和默认值。
+    所有运算自动解包为默认值，switch() 通过 ._name 获取参数标识。
+    """
+
+    __slots__ = ('_name', '_value')
+
+    def __init__(self, name, value):
+        self._name = name
+        self._value = value
+
+    @property
+    def name(self):
+        return self._name
+
+    def __eq__(self, o):  return self._value == o
+    def __ne__(self, o):  return self._value != o
+    def __lt__(self, o):  return self._value < o
+    def __gt__(self, o):  return self._value > o
+    def __hash__(self):   return hash(self._value)
+
+    def __bool__(self):   return bool(self._value)
+    def __int__(self):    return int(self._value)
+    def __float__(self):  return float(self._value)
+    def __str__(self):    return str(self._value)
+
+    def __iter__(self):   return iter(self._value)
+    def __getitem__(self, i): return self._value[i]
+
+    def __repr__(self):   return f'ParamRef({self._name!r}, {self._value!r})'
+
+
 @dataclass
 class ParamDef:
     name: str
@@ -47,6 +81,7 @@ class ParamDef:
     label: str | dict[str, str] | None = None
     description: str | dict[str, str] | None = None
     options: list | dict | None = None
+    switch_cases: dict | None = None
 
 
 @dataclass

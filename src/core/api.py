@@ -440,6 +440,16 @@ def _create_context(event: models.Event):
         return _effective_default(default, options)
 
     @register()
+    def switch(source, cases):
+        """声明参数可见性依赖。
+
+        Args:
+            source: 源参数，即驱动可见性切换的 params() 返回值。
+            cases: dict，键为源参数的可能值，值为该值下应显示参数组成的列表。
+        """
+        pass
+
+    @register()
     def event_hotkey():
         """获取当前事件的热键。
 
