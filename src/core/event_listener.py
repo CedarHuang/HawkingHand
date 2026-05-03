@@ -1,11 +1,14 @@
 import fnmatch
+from concurrent.futures import ThreadPoolExecutor
+
 import keyboard
-import threading
 
 from core import config
 from core import foreground_listener
 from core import logger
 from core.scripts import scripts
+
+_executor = ThreadPoolExecutor(max_workers=256)
 
 
 def _ensure_keyboard_listening():
@@ -84,25 +87,24 @@ def restart():
 
 
 def toggle_factory(event):
-    """Toggle 类型：首次热键启动脚本线程，再次热键 set_stop 终止。"""
+    """Toggle 类型：首次热键启动脚本，再次热键 set_stop 终止。"""
     parse_scope(event)
     script, context = scripts.load_as_function(event)
-    thread = None
+    future = None
 
     def if_ing_then_stop():
-        if thread and thread.is_alive():
+        if future and future.running():
             context.set_stop()
             return True
         return False
 
     def callback():
-        nonlocal thread
+        nonlocal future
         if not check_scope(event):
             return
         if if_ing_then_stop():
             return
-        thread = threading.Thread(target=script)
-        thread.start()
+        future = _executor.submit(script)
 
     foreground_listener.add_event_callback_list(if_ing_then_stop)
 
@@ -113,21 +115,19 @@ def hold_factory(event):
     """Hold 类型：返回 (start_cb, stop_cb)，分别注册到热键按下和释放。"""
     parse_scope(event)
     script, context = scripts.load_as_function(event)
-    thread = None
+    future = None
 
     def start_script():
-        nonlocal thread
+        nonlocal future
         if not check_scope(event):
             return
-        if thread and thread.is_alive():
+        if future and future.running():
             return
         context.clear_stop()
-        thread = threading.Thread(target=script)
-        thread.start()
+        future = _executor.submit(script)
 
     def stop_script():
-        nonlocal thread
-        if thread and thread.is_alive():
+        if future and future.running():
             context.set_stop()
 
     return start_script, stop_script
