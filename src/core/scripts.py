@@ -154,6 +154,7 @@ class ScriptCode:
         self.name = script_name
         self.path = script_path
         self.code = ''
+        self.mtime = 0
         self.reload()
 
         try:
@@ -168,6 +169,7 @@ class ScriptCode:
         try:
             with open(self.path, 'r', encoding='utf-8') as f:
                 self.code = f.read()
+            self.mtime = os.path.getmtime(self.path)
         except:
             logger.script.error(f'Error reading script file: "{self.path}":', exc_info=True)
 
@@ -183,10 +185,6 @@ class ScriptObserver(watchdog.events.FileSystemEventHandler):
         super().__init__()
         self.observer = watchdog.observers.Observer()
         self.observer.schedule(self, common.scripts_path(), recursive=True)
-        self._known_mtimes = {
-            # key: file path
-            # value: 上次处理时的 mtime
-        }
 
     def on_modified(self, event):
         if event.is_directory or not event.src_path.endswith('.py'):
@@ -204,9 +202,8 @@ class ScriptObserver(watchdog.events.FileSystemEventHandler):
         except OSError:
             return
 
-        if self._known_mtimes.get(path) == mtime:
+        if mtime == instance.mtime:
             return
-        self._known_mtimes[path] = mtime
 
         instance.reload()
         if instance.name in _script_info_cache:
