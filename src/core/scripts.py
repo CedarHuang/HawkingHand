@@ -375,7 +375,7 @@ class ExtractContext(ScriptContext):
         self._mode = self.MODE_PARAMS
         self._script_name = script_code.name
         param_defs: list[ParamDef] = []
-        self.update(self._create_extract_params(param_defs))
+        self.update(self._create_extract_params(param_defs, script_code.name))
         self['init'] = api._create_init()
 
         def _run_extract():
@@ -415,7 +415,7 @@ class ExtractContext(ScriptContext):
         return dict(info)
 
     @staticmethod
-    def _create_extract_params(param_defs: list[ParamDef]):
+    def _create_extract_params(param_defs: list[ParamDef], script_name: str = ''):
         def _extract_params(name, default, /, *, label=None, description=None, options=None, type=None):
             # 参数不足或 default=None 时忽略该调用
             if name is None or default is None:
@@ -450,6 +450,16 @@ class ExtractContext(ScriptContext):
                     if p_name is not None:
                         names.append(p_name)
                 targets[case_value] = names
+            # 校验被引用参数是否存在
+            declared_names = {pd.name for pd in param_defs}
+            for case_value, names in targets.items():
+                for p_name in names:
+                    if p_name not in declared_names:
+                        logger.script.warning(
+                            f'Script <{script_name}> switch(): '
+                            f'param {p_name!r} referenced in case {case_value!r} '
+                            f'is not declared by params()'
+                        )
             for pd in param_defs:
                 if pd.name == source_name:
                     pd.switch_cases = targets
