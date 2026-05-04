@@ -83,22 +83,36 @@ class ParamDef:
     options: list | dict | None = None
     switch_cases: dict | None = None
 
+    _PAIRS_FIELDS = {'options', 'switch_cases'}
+
     def to_dict(self) -> dict:
         result = {}
         for f in fields(self):
             value = getattr(self, f.name)
             if value is None:
                 continue
-            result[f.name] = value.value if f.name == 'type' else value
+            if f.name == 'type':
+                result[f.name] = value.value
+            elif f.name in self._PAIRS_FIELDS and isinstance(value, dict):
+                result[f.name] = [[k, v] for k, v in value.items()]
+            else:
+                result[f.name] = value
         return result
 
     @classmethod
     def from_dict(cls, d: dict) -> 'ParamDef':
         known = {f.name for f in fields(cls)}
-        return cls(**{
-            k: ParamType(v) if k == 'type' else v
-            for k, v in d.items() if k in known
-        })
+        kwargs = {}
+        for k, v in d.items():
+            if k not in known:
+                continue
+            if k == 'type':
+                kwargs[k] = ParamType(v)
+            elif k in cls._PAIRS_FIELDS and isinstance(v, list) and v and isinstance(v[0], list):
+                kwargs[k] = dict(v)
+            else:
+                kwargs[k] = v
+        return cls(**kwargs)
 
 
 @dataclass
