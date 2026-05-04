@@ -1,8 +1,12 @@
 import ctypes
 import sys
-from PySide6.QtCore import QObject, QEvent, Qt, QPropertyAnimation, QEasingCurve, QTimer, QSize
+
+from PySide6.QtCore import QObject, QEvent, Qt, QLocale, QPropertyAnimation, QEasingCurve, QTimer, QSize
 from PySide6.QtGui import QFontMetrics
 from PySide6.QtWidgets import QWidget, QSpinBox, QDoubleSpinBox, QComboBox, QGraphicsOpacityEffect, QApplication
+
+from core.config import settings as configSettings
+from core.models import ParamDef, ParamType
 
 
 def _polishWidget(widget: QWidget):
@@ -271,3 +275,76 @@ def polishInputWidgets(parent: QWidget):
     if app is not None and not _ToolTipShadowFilter._filterRegistered:
         _ToolTipShadowFilter._filterRegistered = True
         app.installEventFilter(_toolTipShadowFilter)
+
+
+# ---- 多语言 & 参数展示工具 ----
+
+def getLocalizedText(text: str | dict[str, str] | None, fallback: str = "") -> str:
+    """从多语言文本中获取当前语言的文本。
+
+    语言回退链：用户配置 → 系统语言 → 英文 → 首个条目 → fallback
+    每层内部先精确匹配 langCode，再前缀匹配 langPrefix。
+
+    Args:
+        text: 单语言文本(str)或多语言映射(dict[str, str])或 None
+        fallback: 当 text 为 None 或空 dict 时的回退文本
+
+    Returns:
+        当前语言的文本
+    """
+    match text:
+        case None:
+            return fallback
+        case str():
+            return text
+        case dict():
+            if not text:
+                return fallback
+            candidates = []
+            userLang = configSettings.language
+            if userLang and userLang != "system":
+                candidates.append(userLang)
+            candidates.append(QLocale().name())
+            candidates.append("en_US")
+
+            for langCode in candidates:
+                if langCode in text:
+                    return text[langCode]
+                langPrefix = langCode.split("_")[0]
+                for key, value in text.items():
+                    if key.split("_")[0] == langPrefix:
+                        return value
+
+            return next(iter(text.values()))
+        case _:
+            return fallback
+
+
+def formatParamValue(pd: ParamDef, value: object) -> str:
+    """将参数值格式化为用于显示的字符串。
+
+    Args:
+        pd: ParamDef 参数声明
+        value: 参数值
+    """
+    if pd.type == ParamType.BOOL:
+        return "On" if value else "Off"
+    if pd.type == ParamType.COORD:
+        try:
+            return f"({value[0]}, {value[1]})"
+        except (TypeError, IndexError):
+            return str(value)
+    if pd.type == ParamType.CHOICE and pd.options:
+        return _formatChoiceDisplay(pd.options, value)
+    return str(value)
+
+
+def _formatChoiceDisplay(options: list | dict, value: object) -> str:
+    """从 options 中查找 value 对应的显示文本。"""
+    if isinstance(options, dict):
+        option = options.get(value)
+        if option is not None:
+            if isinstance(option, dict):
+                return getLocalizedText(option, fallback=str(value))
+            return str(option)
+    return str(value)

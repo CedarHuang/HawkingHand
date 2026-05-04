@@ -85,6 +85,14 @@ class ParamDef:
 
     _PAIRS_FIELDS = {'options', 'switch_cases'}
 
+    @staticmethod
+    def compute_switch_visibility(switch_cases: dict, source_value) -> tuple[set[str], set[str]]:
+        """根据 switch_cases 和源参数当前值，返回 (all_switched, visible)。"""
+        all_switched = {n for names in switch_cases.values() for n in names}
+        visible = set(switch_cases.get(source_value, []))
+        return all_switched, visible
+
+
     def to_dict(self) -> dict:
         result = {}
         for f in fields(self):

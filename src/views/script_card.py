@@ -14,7 +14,7 @@ from PySide6.QtWidgets import QFrame, QMenu, QWidget
 from core.scripts import get_display_name, get_metadata, is_builtin
 from ui.generated.ui_script_card import Ui_ScriptCard
 from views import _polishWidget
-from views.event_edit_page import getLocalizedText
+from views import getLocalizedText
 
 
 class ScriptCard(QFrame):

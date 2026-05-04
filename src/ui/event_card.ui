@@ -159,24 +159,11 @@
          </widget>
         </item>
         <item>
-         <widget class="QLabel" name="extraInfoLabel">
+         <widget class="ElidedLabel" name="extraInfoLabel">
           <property name="text">
            <string notr="true"/>
           </property>
          </widget>
-        </item>
-        <item>
-         <spacer name="bottomRowSpacer">
-          <property name="orientation">
-           <enum>Qt::Horizontal</enum>
-          </property>
-          <property name="sizeHint" stdset="0">
-           <size>
-            <width>40</width>
-            <height>20</height>
-           </size>
-          </property>
-         </spacer>
         </item>
        </layout>
       </item>
@@ -240,6 +227,11 @@
    <class>ToggleSwitch</class>
    <extends>QAbstractButton</extends>
    <header>views.toggle_switch</header>
+  </customwidget>
+  <customwidget>
+   <class>ElidedLabel</class>
+   <extends>QLabel</extends>
+   <header>views.elided_label</header>
   </customwidget>
  </customwidgets>
  <resources/>

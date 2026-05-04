@@ -71,7 +71,7 @@ class EventCard(QFrame):
 
         # bottomRow: 范围 · 额外信息
         self.ui.scopeLabel.setText(self.tr("Scope: {scope}").format(scope=scope))
-        self.ui.extraInfoLabel.setText(extra)
+        self.ui.extraInfoLabel.setFullText(extra)
 
         # 启用状态（阻断信号避免触发回调）
         self.ui.btnToggleEnabled.blockSignals(True)

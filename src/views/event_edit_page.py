@@ -8,7 +8,7 @@
 import os
 
 import keyboard
-from PySide6.QtCore import Signal, QEvent, QObject, QCoreApplication, QLocale, Qt
+from PySide6.QtCore import Signal, QEvent, QObject, QCoreApplication, Qt
 from PySide6.QtGui import QTextDocument, QPalette
 from PySide6.QtWidgets import (
     QWidget, QButtonGroup, QMessageBox,
@@ -19,11 +19,10 @@ from PySide6.QtWidgets import (
 from core import common
 from core import event_listener
 from core import logger
-from core.config import settings as configSettings
 from core.models import ParamDef, ParamType
 from core.scripts import get_metadata, is_builtin
 from ui.generated.ui_event_edit_page import Ui_EventEditPage
-from views import _polishWidget, polishInputWidgets
+from views import _polishWidget, getLocalizedText, formatParamValue, polishInputWidgets
 from views.toggle_switch import ToggleSwitch
 
 
@@ -40,50 +39,6 @@ def prettifyHotkey(hotkey: str) -> str:
     normalized = keyboard.get_hotkey_name(hotkey.split("+"))
     return "+".join(part.strip().capitalize() for part in normalized.split("+"))
 
-
-def getLocalizedText(text: str | dict[str, str] | None, fallback: str = "") -> str:
-    """从多语言文本中获取当前语言的文本。
-
-    语言回退链：用户配置 → 系统语言 → 英文 → 首个条目 → fallback
-    每层内部先精确匹配 langCode，再前缀匹配 langPrefix。
-
-    Args:
-        text: 单语言文本(str)或多语言映射(dict[str, str])或 None
-        fallback: 当 text 为 None 或空 dict 时的回退文本
-
-    Returns:
-        当前语言的文本
-    """
-    match text:
-        case None:
-            return fallback
-        case str():
-            return text
-        case dict():
-            if not text:
-                return fallback
-            # 构建候选语言列表
-            candidates = []
-            userLang = configSettings.language
-            if userLang and userLang != "system":
-                candidates.append(userLang)
-            candidates.append(QLocale().name())  # 系统语言
-            candidates.append("en_US")           # 英文兜底
-
-            for langCode in candidates:
-                # 精确匹配
-                if langCode in text:
-                    return text[langCode]
-                # 前缀匹配（如 "zh" 匹配 "zh_CN"）
-                langPrefix = langCode.split("_")[0]
-                for key, value in text.items():
-                    if key.split("_")[0] == langPrefix:
-                        return value
-
-            # 回退到第一个条目
-            return next(iter(text.values()))
-        case _:
-            return fallback
 
 
 class HotkeyRecorder(QObject):
@@ -234,6 +189,16 @@ class EventEditPage(QWidget):
     # 信号定义
     backRequested = Signal()              # 请求返回列表页
     saveRequested = Signal(dict)          # 请求保存（传递表单数据字典）
+
+    # switch 源控件类型 → 值变更信号名 / 值提取函数
+    _SWITCH_SIGNALS = {
+        QComboBox: 'currentIndexChanged',
+        ToggleSwitch: 'toggled',
+    }
+    _SWITCH_VALUE_GETTERS = {
+        QComboBox: lambda w: w.currentText() if (v := w.currentData()) is None else v,
+        ToggleSwitch: lambda w: w.isChecked(),
+    }
 
     def __init__(self, parent: QWidget = None):
         super().__init__(parent)
@@ -505,24 +470,21 @@ class EventEditPage(QWidget):
             self._restoreScriptArgs(self._scriptArgsToRestore)
             self._scriptArgsToRestore = None
 
-        # 连接 switch 源控件信号并应用初始可见性
+        # 连接 switch 源控件信号
         for pd in self._currentParamDefs:
             if pd.switch_cases:
                 source_name = pd.name
                 source_widget = self._paramWidgets.get(source_name)
-                if isinstance(source_widget, QComboBox):
-                    source_widget.currentIndexChanged.connect(
-                        lambda _idx, n=source_name: self._updateSwitchVisibility(n)
-                    )
-                elif isinstance(source_widget, ToggleSwitch):
-                    source_widget.toggled.connect(
-                        lambda *a, n=source_name: self._updateSwitchVisibility(n)
+                signal_name = self._SWITCH_SIGNALS.get(type(source_widget))
+                if signal_name:
+                    getattr(source_widget, signal_name).connect(
+                        lambda *_, n=source_name: self._updateSwitchVisibility(n)
                     )
                 logger.script.debug(
                     f'Switch connected: source={source_name!r}, cases={pd.switch_cases!r}'
                 )
-                self._updateSwitchVisibility(source_name)
-                break
+        # 一次性初始化所有 switch 可见性
+        self._updateSwitchVisibility()
 
     def _clearScriptParams(self):
         """清除所有动态创建的脚本参数控件"""
@@ -537,36 +499,36 @@ class EventEditPage(QWidget):
         self._paramRows = {}
 
     def _updateSwitchVisibility(self, source_name=None):
-        """根据源参数的当前值更新各行可见性。"""
+        """根据源参数的当前值更新各行可见性。
+
+        当 source_name 指定时仅处理对应 switch 源（信号回调路径），
+        否则一次性处理所有 switch 源（初始化路径）。
+        """
         for pd in self._currentParamDefs:
-            if pd.switch_cases:
-                if source_name is not None and pd.name != source_name:
+            if not pd.switch_cases:
+                continue
+            if source_name is not None and pd.name != source_name:
+                continue
+            source_widget = self._paramWidgets.get(pd.name)
+            if source_widget is None:
+                continue
+            getter = self._SWITCH_VALUE_GETTERS.get(type(source_widget))
+            if getter is None:
+                continue
+            current_value = getter(source_widget)
+            if current_value is None:
+                continue
+            all_switched, visible = ParamDef.compute_switch_visibility(pd.switch_cases, current_value)
+            for name, row in self._paramRows.items():
+                if name == pd.name:
                     continue
-                source_widget = self._paramWidgets.get(pd.name)
-                current_value = None
-                if isinstance(source_widget, QComboBox):
-                    current_value = source_widget.currentData()
-                    if current_value is None:
-                        current_value = source_widget.currentText()
-                elif isinstance(source_widget, ToggleSwitch):
-                    current_value = source_widget.isChecked()
-                if current_value is None:
-                    continue
-                visible_params = pd.switch_cases.get(current_value, [])
-                # 收集所有参与 switch 的参数名（未参与者始终可见，不受影响）
-                all_switched: set[str] = set()
-                for names in pd.switch_cases.values():
-                    all_switched.update(names)
-                for name, row in self._paramRows.items():
-                    if name == pd.name:
-                        continue
-                    if name in all_switched:
-                        row.setVisible(name in visible_params)
-                hidden = [n for n in all_switched if n not in visible_params]
-                logger.script.debug(
-                    f'Switch updated: {pd.name!r}={current_value!r} '
-                    f'-> show={visible_params}, hide={hidden}'
-                )
+                if name in all_switched:
+                    row.setVisible(name in visible)
+            logger.script.debug(
+                f'Switch updated: {pd.name!r}={current_value!r} '
+                f'-> show={sorted(visible)}, hide={sorted(all_switched - visible)}'
+            )
+            if source_name is not None:
                 return
 
     def _createParamRow(self, paramDef: ParamDef) -> QFrame:
@@ -649,20 +611,9 @@ class EventEditPage(QWidget):
         combo.setMinimumHeight(32)
 
         options = paramDef.options
-
-        if isinstance(options, list):
-            for value in options:
-                displayText = str(value) if not isinstance(value, str) else value
-                combo.addItem(displayText, value)
-        elif isinstance(options, dict):
-            for key, val in options.items():
-                if isinstance(val, dict):
-                    # 多语言：val 是 {lang: text}
-                    displayText = getLocalizedText(val, fallback=str(key))
-                else:
-                    # 单语言映射
-                    displayText = str(val)
-                combo.addItem(displayText, key)
+        items = options if isinstance(options, list) else options.keys()
+        for value in items:
+            combo.addItem(formatParamValue(paramDef, value), value)
 
         # 设置默认选中项
         default = paramDef.default

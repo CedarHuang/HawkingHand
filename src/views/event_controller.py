@@ -11,12 +11,13 @@ import os
 
 from PySide6.QtWidgets import QStackedWidget, QPushButton
 
-from core import common
+from core import common, logger
 from core.config import events as configEvents
-from core.models import Event, ScriptParams
-from core.scripts import get_display_name
+from core.models import Event, ParamDef, ScriptParams
+from core.scripts import get_display_name, get_metadata
+from views import getLocalizedText, formatParamValue
 from views.constants import PageIndex
-from views.event_edit_page import EventEditPage, getLocalizedText
+from views.event_edit_page import EventEditPage
 from views.event_list_page import EventListPage
 
 
@@ -72,9 +73,55 @@ class EventController:
             display_name = getLocalizedText(display_name, fallback=script_name)
         scope = event.scope or "*"
         enabled = event.enabled
-        extra = ""
+        extra = EventController._formatParamsExtra(script_name, event.params.script_args)
 
         return eventType, hotkey, display_name, script_name, scope, extra, enabled
+
+    @staticmethod
+    def _formatParamsExtra(script_name: str, script_args: dict[str, object]) -> str:
+        """将脚本参数格式化为卡片摘要字符串，遵循 switch_cases 可见性规则。
+
+        Args:
+            script_name: 脚本名
+            script_args: 参数名→值的映射
+
+        Returns:
+            格式化后的参数字符串，如 "delay=0.5  ·  button=Left"
+        """
+        if not script_args:
+            return ""
+
+        try:
+            metadata = get_metadata(script_name)
+        except Exception:
+            logger.script.warning(f'Failed to get metadata for script {script_name!r}', exc_info=True)
+            return ""
+
+        param_defs: dict[str, ParamDef] = {}
+        hidden_params: set[str] = set()
+        for pd in metadata.params:
+            param_defs[pd.name] = pd
+            if pd.switch_cases:
+                source_value = script_args.get(pd.name, pd.default)
+                all_switched, visible = ParamDef.compute_switch_visibility(pd.switch_cases, source_value)
+                hidden_params |= all_switched - visible
+
+        parts = []
+        for name, value in script_args.items():
+            if name in hidden_params:
+                continue
+            pd = param_defs.get(name)
+            if pd is None:
+                continue
+
+            label = getLocalizedText(pd.label, fallback=name)
+            value_str = formatParamValue(pd, value)
+            parts.append(f"{label}={value_str}")
+
+        if not parts:
+            return ""
+
+        return "  ·  ".join(parts)
 
     @staticmethod
     def _scanScripts() -> list[tuple[str, str]]:
