@@ -14,7 +14,7 @@ from core import common
 from core import event_listener
 from core import logger
 from core import vision_backend
-from core.models import ParamDef, ParamRef, ParamType
+from core.models import ParamDef, ParamRef, ParamType, ScriptMetadata
 
 
 def _scan_builtin_names() -> frozenset[str]:
@@ -36,14 +36,14 @@ def is_builtin(name: str) -> bool:
     return name in BUILTIN_SCRIPT_NAMES
 
 
-_script_info_cache: dict[str, dict] = {}
+_metadata_cache: dict[str, ScriptMetadata] = {}
 
 
-def _load_info_cache() -> dict[str, dict]:
-    """从磁盘加载 info 缓存。自动清理已删除脚本的条目、mtime 不匹配的条目。"""
-    cache_path = common.info_cache_path()
+def _load_metadata_cache() -> dict[str, ScriptMetadata]:
+    """从磁盘加载 metadata 缓存。自动清理已删除脚本的条目、mtime 不匹配的条目。"""
+    cache_path = common.metadata_cache_path()
     scripts_dir = common.scripts_path()
-    cache: dict[str, dict] = {}
+    cache: dict[str, ScriptMetadata] = {}
     try:
         with open(cache_path, 'r', encoding='utf-8') as f:
             raw = json.load(f)
@@ -58,57 +58,52 @@ def _load_info_cache() -> dict[str, dict]:
                 continue  # mtime 不匹配，需要重新提取
         except OSError:
             continue
-        cache[name] = entry
+        cache[name] = ScriptMetadata.from_dict(entry)
     return cache
 
 
-def _save_info_cache():
+def _save_metadata_cache():
     """将当前缓存持久化到磁盘。"""
-    cache_path = common.info_cache_path()
+    cache_path = common.metadata_cache_path()
     try:
         with open(cache_path, 'w', encoding='utf-8') as f:
-            json.dump(_script_info_cache, f, indent=2, ensure_ascii=False)
+            json.dump(
+                {name: entry.to_dict() for name, entry in _metadata_cache.items()},
+                f, indent=4, ensure_ascii=False,
+            )
     except OSError:
-        logger.script.error('Failed to save info cache:', exc_info=True)
+        logger.script.error('Failed to save metadata cache:', exc_info=True)
 
 
-def _cache_info(script_name: str):
-    """提取脚本 info 并写入缓存（内存 + 磁盘）。"""
-    if script_name == '__builtins__':
-        _script_info_cache[script_name] = {'name': script_name, 'description': None}
-        return
-    try:
-        info = ScriptCode.get_by_name(script_name).get_info()
-    except Exception:
-        info = {'name': script_name, 'description': None}
-    # 记录 mtime 用于下次启动比对
+def _cache_metadata(script_name: str):
+    """提取脚本 metadata 并写入缓存（内存 + 磁盘）。"""
+    metadata = ScriptCode.get_by_name(script_name).extract_metadata()
     filepath = os.path.join(common.scripts_path(), f'{script_name}.py')
     try:
-        info['mtime'] = os.path.getmtime(filepath)
+        metadata.mtime = os.path.getmtime(filepath)
     except OSError:
         pass
-    _script_info_cache[script_name] = info
-    _save_info_cache()
+    _metadata_cache[script_name] = metadata
+    _save_metadata_cache()
 
 
-def get_script_info(script_name: str) -> dict:
-    """获取脚本的 info 字典（含 name 和 description）。磁盘缓存 + mtime 校验。"""
-    if script_name not in _script_info_cache:
-        _cache_info(script_name)
-    return _script_info_cache[script_name]
+def get_metadata(script_name: str) -> ScriptMetadata:
+    """获取脚本 metadata。磁盘缓存 + mtime 校验。"""
+    if script_name not in _metadata_cache:
+        _cache_metadata(script_name)
+    return _metadata_cache[script_name]
 
 
 def get_display_name(script_name: str) -> str | dict:
-    """获取脚本展示名。与 get_script_info 共享缓存。"""
-    info = get_script_info(script_name)
-    name = info.get('name')
+    """获取脚本展示名。"""
+    name = get_metadata(script_name).name
     if name is not None and name != script_name:
         return name
     return script_name
 
 
 def ensure_builtin_scripts():
-    """将内置脚本源文件复制到用户 scripts 目录。仅内容不同时覆写，避免 mtime 刷新触发 info 提取。"""
+    """将内置脚本源文件复制到用户 scripts 目录。仅内容不同时覆写，避免 mtime 刷新触发 metadata 提取。"""
     src_dir = common.builtins_src_dir()
     if not os.path.isdir(src_dir):
         return
@@ -173,11 +168,9 @@ class ScriptCode:
         except:
             logger.script.error(f'Error reading script file: "{self.path}":', exc_info=True)
 
-    def get_info(self) -> dict:
-        return ExtractContext().run_info_with_timeout(self)
-
-    def get_param_defs(self) -> list[ParamDef]:
-        return ExtractContext().run_params_with_timeout(self)
+    def extract_metadata(self) -> ScriptMetadata:
+        """沙箱运行，返回脚本 metadata。"""
+        return ExtractContext().run_with_timeout(self)
 
 
 class ScriptObserver(watchdog.events.FileSystemEventHandler):
@@ -206,9 +199,9 @@ class ScriptObserver(watchdog.events.FileSystemEventHandler):
             return
 
         instance.reload()
-        if instance.name in _script_info_cache:
-            del _script_info_cache[instance.name]
-            _save_info_cache()
+        if instance.name in _metadata_cache:
+            del _metadata_cache[instance.name]
+            _save_metadata_cache()
         logger.script.info(f'File "{path}" has been modified, reload!')
 
         event_listener.restart()
@@ -224,7 +217,7 @@ class ScriptObserver(watchdog.events.FileSystemEventHandler):
         logger.script.debug(f'Stopped observing scripts directory: {common.scripts_path()}')
 
 # 模块加载时初始化缓存
-_script_info_cache.update(_load_info_cache())
+_metadata_cache.update(_load_metadata_cache())
 script_observer = ScriptObserver()
 
 
@@ -334,28 +327,19 @@ class ScriptContext(dict):
 
 
 class ExtractContext(ScriptContext):
-    MODE_INFO = 'info'
-    MODE_PARAMS = 'params'
 
     def __init__(self):
         self._script_name = ''
-        self._mode = ''
         super().__init__(None)
 
     def create_restricted_builtins(self):
         restricted_builtins = super().create_restricted_builtins()
 
-        # 非活跃模式的 API 替换为 noop，活跃模式的保留（由 run_*_with_timeout 注入）
-        if self._mode == self.MODE_INFO:
-            restricted_builtins['params'] = lambda name, default, /, **_: default
-        else:
-            restricted_builtins['info'] = lambda name=None, description=None: None
-
         def _make_disabled_handler(name):
             def handler(*args, **kwargs):
                 logger.script.debug(
                     f'Script <{self._script_name}> called disabled builtin <{name}> '
-                    f'in <{self._mode}> extraction sandbox, script execution terminated'
+                    f'in extraction sandbox, script execution terminated'
                 )
                 return restricted_builtins['exit']()
             return handler
@@ -367,12 +351,11 @@ class ExtractContext(ScriptContext):
 
         return restricted_builtins
 
-    def run_params_with_timeout(self, script_code: ScriptCode) -> list[ParamDef]:
-        """PARAMS 模式：只录制 params() 调用，info() 为 noop。"""
-        self._mode = self.MODE_PARAMS
+    def run_with_timeout(self, script_code: ScriptCode) -> ScriptMetadata:
+        """单次沙箱运行，返回脚本 metadata。"""
         self._script_name = script_code.name
-        param_defs: list[ParamDef] = []
-        self.update(self._create_extract_params(param_defs, script_code.name))
+        metadata = ScriptMetadata()
+        self.update(self._create_extract_api(script_code.name, metadata))
         self['init'] = api._create_init()
 
         def _run_extract():
@@ -381,40 +364,24 @@ class ExtractContext(ScriptContext):
             except api.ScriptExit:
                 pass
             except Exception as e:
-                logger.script.warning(f'Script <{script_code.name}> extract params failed: {e}')
+                logger.script.warning(f'Script <{script_code.name}> extract failed: {e}')
 
         extract_thread = threading.Thread(target=_run_extract, daemon=True)
         extract_thread.start()
         extract_thread.join(timeout=0.5)
 
-        return list(param_defs)
-
-    def run_info_with_timeout(self, script_code: ScriptCode) -> dict:
-        """INFO 模式：只录制 info() 调用，params() 为 noop。"""
-        self._mode = self.MODE_INFO
-        self._script_name = script_code.name
-        info: dict = {}
-        self['info'] = self._create_extract_info(info)
-        self['init'] = api._create_init()
-
-        def _run_extract():
-            try:
-                exec(script_code.code, self)
-            except api.ScriptExit:
-                pass
-            except Exception as e:
-                logger.script.warning(f'Script <{script_code.name}> extract info failed: {e}')
-
-        extract_thread = threading.Thread(target=_run_extract, daemon=True)
-        extract_thread.start()
-        extract_thread.join(timeout=0.5)
-
-        return dict(info)
+        return metadata
 
     @staticmethod
-    def _create_extract_params(param_defs: list[ParamDef], script_name: str = ''):
-        def _extract_params(name, default, /, *, label=None, description=None, options=None, type=None):
-            # 参数不足或 default=None 时忽略该调用
+    def _create_extract_api(script_name: str, metadata: ScriptMetadata):
+        """创建提取沙箱 API，向 metadata 容器中写入提取结果。"""
+
+        def _info(name=None, description=None):
+            metadata.name = name
+            metadata.description = description
+
+        def _params(name, default, /, *, label=None, description=None, options=None, type=None):
+            # 参数不足时忽略该调用
             if name is None or default is None:
                 return None
 
@@ -425,17 +392,17 @@ class ExtractContext(ScriptContext):
 
             # 同名参数已存在直接返回（与 params() 中 name ∈ script_args 的路径对齐，
             # 返回 ParamRef 供 switch() 读取 ._name 建立可见性映射）
-            for pd in param_defs:
+            for pd in metadata.params:
                 if pd.name == name:
                     return ParamRef(name, effective_default)
 
-            param_defs.append(ParamDef(
+            metadata.params.append(ParamDef(
                 name=name, type=param_type, default=effective_default,
                 label=label, description=description, options=options,
             ))
             return ParamRef(name, effective_default)
 
-        def _extract_switch(source, cases):
+        def _switch(source, cases):
             source_name = getattr(source, '_name', None)
             if source_name is None:
                 return
@@ -448,7 +415,7 @@ class ExtractContext(ScriptContext):
                         names.append(p_name)
                 targets[case_value] = names
             # 校验被引用参数是否存在
-            declared_names = {pd.name for pd in param_defs}
+            declared_names = {pd.name for pd in metadata.params}
             for case_value, names in targets.items():
                 for p_name in names:
                     if p_name not in declared_names:
@@ -457,26 +424,12 @@ class ExtractContext(ScriptContext):
                             f'param {p_name!r} referenced in case {case_value!r} '
                             f'is not declared by params()'
                         )
-            for pd in param_defs:
+            for pd in metadata.params:
                 if pd.name == source_name:
                     pd.switch_cases = targets
                     break
 
-        return {'params': _extract_params, 'switch': _extract_switch}
-
-    @staticmethod
-    def _create_extract_info(info: dict):
-        recorded = False
-
-        def _extract_info(name=None, description=None):
-            nonlocal recorded
-            if not recorded:
-                info['name'] = name
-                info['description'] = description
-                recorded = True
-            return None
-
-        return _extract_info
+        return {'info': _info, 'params': _params, 'switch': _switch}
 
 
 class Scripts:

@@ -83,6 +83,46 @@ class ParamDef:
     options: list | dict | None = None
     switch_cases: dict | None = None
 
+    def to_dict(self) -> dict:
+        result = {}
+        for f in fields(self):
+            value = getattr(self, f.name)
+            if value is None:
+                continue
+            result[f.name] = value.value if f.name == 'type' else value
+        return result
+
+    @classmethod
+    def from_dict(cls, d: dict) -> 'ParamDef':
+        known = {f.name for f in fields(cls)}
+        return cls(**{
+            k: ParamType(v) if k == 'type' else v
+            for k, v in d.items() if k in known
+        })
+
+
+@dataclass
+class ScriptMetadata:
+    name: str | dict[str, str] | None = None
+    description: str | dict[str, str] | None = None
+    params: list[ParamDef] = field(default_factory=list)
+    mtime: float = 0.0
+
+    def to_dict(self) -> dict:
+        result = {}
+        for f in fields(self):
+            value = getattr(self, f.name)
+            result[f.name] = [p.to_dict() for p in value] if f.name == 'params' else value
+        return result
+
+    @classmethod
+    def from_dict(cls, d: dict) -> 'ScriptMetadata':
+        known = {f.name for f in fields(cls)}
+        return cls(**{
+            k: [ParamDef.from_dict(p) for p in v] if k == 'params' else v
+            for k, v in d.items() if k in known
+        })
+
 
 @dataclass
 class ScriptParams:

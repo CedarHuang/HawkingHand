@@ -11,7 +11,7 @@ from datetime import datetime
 from PySide6.QtCore import Signal, Qt
 from PySide6.QtWidgets import QFrame, QMenu, QWidget
 
-from core.scripts import get_display_name, get_script_info, is_builtin
+from core.scripts import get_display_name, get_metadata, is_builtin
 from ui.generated.ui_script_card import Ui_ScriptCard
 from views import _polishWidget
 from views.event_edit_page import getLocalizedText
@@ -74,7 +74,7 @@ class ScriptCard(QFrame):
             self.ui.scriptNameLabel.setVisible(False)
         self.ui.builtinBadgeLabel.setVisible(is_builtin(script_name))
         # 脚本描述
-        desc = get_script_info(script_name).get('description')
+        desc = get_metadata(script_name).description
         if desc:
             if isinstance(desc, dict):
                 desc = getLocalizedText(desc)

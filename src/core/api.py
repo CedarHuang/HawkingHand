@@ -527,6 +527,12 @@ def _generate_builtins():
     '为 IDE 提供代码补全和类型提示',
     '"""',
     '',
+    'info(description={',
+    "    'en_US': 'Auto-generated. Provides code completion and type hints for the IDE.',",
+    "    'zh_CN': '自动生成，为 IDE 提供代码补全和类型提示。',",
+    '})',
+    'sleep(0)',
+    '',
     'from builtins import *',
     '',
     ]

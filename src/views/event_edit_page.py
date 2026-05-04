@@ -21,7 +21,7 @@ from core import event_listener
 from core import logger
 from core.config import settings as configSettings
 from core.models import ParamDef, ParamType
-from core.scripts import ScriptCode, is_builtin
+from core.scripts import get_metadata, is_builtin
 from ui.generated.ui_event_edit_page import Ui_EventEditPage
 from views import _polishWidget, polishInputWidgets
 from views.toggle_switch import ToggleSwitch
@@ -469,9 +469,8 @@ class EventEditPage(QWidget):
             self.ui.paramsGroup.setVisible(False)
             return
 
-        # 通过提取沙箱获取参数声明
-        scriptCode = ScriptCode.get_by_name(scriptName)
-        paramDefs = scriptCode.get_param_defs()
+        # 获取参数声明
+        paramDefs = get_metadata(scriptName).params
 
         self._clearScriptParams()
         # 规范化：CHOICE 空 options 降级为 STR，确保声明与控件类型一致
