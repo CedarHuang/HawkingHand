@@ -549,6 +549,9 @@ QFrame#ScriptCard:hover {
     border: 1px solid #C8C9CC;
     background-color: #FDFDFE;
 }
+QFrame#ScriptCard QFrame#typeColorBar {
+    background-color: #A626A4;
+}
 
 /* 脚本展示名标签 */
 QLabel#displayNameLabel {

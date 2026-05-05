@@ -13,7 +13,6 @@ from PySide6.QtWidgets import QFrame, QMenu, QWidget
 
 from core.scripts import get_display_name, get_metadata, is_builtin
 from ui.generated.ui_script_card import Ui_ScriptCard
-from views import _polishWidget
 from views import getLocalizedText
 
 
@@ -35,10 +34,6 @@ class ScriptCard(QFrame):
 
         # 设置鼠标指针为手型，暗示可点击
         self.setCursor(Qt.PointingHandCursor)
-
-        # 固定使用 Script 类型颜色条
-        self.ui.typeColorBar.setProperty("eventType", "Script")
-        _polishWidget(self.ui.typeColorBar)
 
         # 脚本文件路径
         self._filePath = ""
