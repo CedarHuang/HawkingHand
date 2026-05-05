@@ -190,16 +190,6 @@ class EventEditPage(QWidget):
     backRequested = Signal()              # 请求返回列表页
     saveRequested = Signal(dict)          # 请求保存（传递表单数据字典）
 
-    # switch 源控件类型 → 值变更信号名 / 值提取函数
-    _SWITCH_SIGNALS = {
-        QComboBox: 'currentIndexChanged',
-        ToggleSwitch: 'toggled',
-    }
-    _SWITCH_VALUE_GETTERS = {
-        QComboBox: lambda w: w.currentText() if (v := w.currentData()) is None else v,
-        ToggleSwitch: lambda w: w.isChecked(),
-    }
-
     def __init__(self, parent: QWidget = None):
         super().__init__(parent)
         self.ui = Ui_EventEditPage()
@@ -434,17 +424,8 @@ class EventEditPage(QWidget):
             self.ui.paramsGroup.setVisible(False)
             return
 
-        # 获取参数声明
-        paramDefs = get_metadata(scriptName).params
-
         self._clearScriptParams()
-        # 规范化：CHOICE 空 options 降级为 STR，确保声明与控件类型一致
-        self._currentParamDefs = [
-            ParamDef(name=pd.name, type=ParamType.STR, default=pd.default,
-                     label=pd.label, description=pd.description, options=None)
-            if pd.type == ParamType.CHOICE and not pd.options else pd
-            for pd in paramDefs
-        ]
+        self._currentParamDefs = get_metadata(scriptName).params
 
         if not self._currentParamDefs:
             # 脚本无参数，隐藏整组
@@ -470,19 +451,6 @@ class EventEditPage(QWidget):
             self._restoreScriptArgs(self._scriptArgsToRestore)
             self._scriptArgsToRestore = None
 
-        # 连接 switch 源控件信号
-        for pd in self._currentParamDefs:
-            if pd.switch_cases:
-                source_name = pd.name
-                source_widget = self._paramWidgets.get(source_name)
-                signal_name = self._SWITCH_SIGNALS.get(type(source_widget))
-                if signal_name:
-                    getattr(source_widget, signal_name).connect(
-                        lambda *_, n=source_name: self._updateSwitchVisibility(n)
-                    )
-                logger.script.debug(
-                    f'Switch connected: source={source_name!r}, cases={pd.switch_cases!r}'
-                )
         # 一次性初始化所有 switch 可见性
         self._updateSwitchVisibility()
 
@@ -512,10 +480,7 @@ class EventEditPage(QWidget):
             source_widget = self._paramWidgets.get(pd.name)
             if source_widget is None:
                 continue
-            getter = self._SWITCH_VALUE_GETTERS.get(type(source_widget))
-            if getter is None:
-                continue
-            current_value = getter(source_widget)
+            current_value = self._getParamValue(source_widget)
             if current_value is None:
                 continue
             all_switched, visible = ParamDef.compute_switch_visibility(pd.switch_cases, current_value)
@@ -560,6 +525,17 @@ class EventEditPage(QWidget):
         widget = self._createParamWidget(paramDef)
         self._paramWidgets[paramDef.name] = widget
         self._paramRows[paramDef.name] = row
+
+        # 连接跨类型行为
+        assert hasattr(widget, 'onChanged'), f'{type(widget).__name__} missing onChanged injection'
+        widget.onChanged(self._markDirty)
+        if paramDef.switch_cases:
+            widget.onChanged(
+                lambda *_, n=paramDef.name: self._updateSwitchVisibility(n)
+            )
+            logger.script.debug(
+                f'Switch connected: source={paramDef.name!r}, cases={paramDef.switch_cases!r}'
+            )
 
         if paramDef.type == ParamType.BOOL:
             # bool 类型：开关在左侧（不加 stretch），右侧加 spacer 推到左边
@@ -610,7 +586,11 @@ class EventEditPage(QWidget):
         )
         combo.setMinimumHeight(32)
 
-        options = paramDef.options
+        options = paramDef.options or []
+        if not options:
+            logger.script.warning(
+                f'CHOICE param {paramDef.name!r} has no options, creating empty dropdown'
+            )
         items = options if isinstance(options, list) else options.keys()
         for value in items:
             combo.addItem(formatParamValue(paramDef, value), value)
@@ -621,12 +601,13 @@ class EventEditPage(QWidget):
         if defaultIdx >= 0:
             combo.setCurrentIndex(defaultIdx)
         else:
-            # 防御性处理：理论上 _effective_default 已将 default 修正为 options 中的有效值，
-            # 此分支不应触发；若触发则选中第一项兜底
+            # default 不在 options 中时，选中第一项兜底
             if combo.count() > 0:
                 combo.setCurrentIndex(0)
 
-        combo.currentIndexChanged.connect(self._markDirty)
+        combo.getValue = lambda c=combo: c.currentData() if c.count() > 0 else None
+        combo.setValue = lambda v, c=combo: c.setCurrentIndex(idx) if (idx := c.findData(v)) >= 0 else None
+        combo.onChanged = lambda cb, c=combo: c.currentIndexChanged.connect(cb)
         return combo
 
     def _createCoordWidget(self, paramDef: ParamDef) -> QFrame:
@@ -651,7 +632,6 @@ class EventEditPage(QWidget):
         spinX.setMinimumSize(80, 32)
         spinX.setRange(-1, 99999)
         spinX.setValue(defaultX)
-        spinX.valueChanged.connect(self._markDirty)
         layout.addWidget(spinX)
 
         yLabel = QLabel("Y")
@@ -662,7 +642,6 @@ class EventEditPage(QWidget):
         spinY.setMinimumSize(80, 32)
         spinY.setRange(-1, 99999)
         spinY.setValue(defaultY)
-        spinY.valueChanged.connect(self._markDirty)
         layout.addWidget(spinY)
 
         hint = QLabel(QCoreApplication.translate(
@@ -674,14 +653,19 @@ class EventEditPage(QWidget):
 
         container._spinX = spinX
         container._spinY = spinY
+        container.getValue = lambda c=container: [c._spinX.value(), c._spinY.value()]
+        container.setValue = lambda v, c=container: (
+            c._spinX.setValue(int(v[0])), c._spinY.setValue(int(v[1]))
+        ) if isinstance(v, (list, tuple)) and len(v) >= 2 else None
+        container.onChanged = lambda cb, c=container: (
+            c._spinX.valueChanged.connect(cb),
+            c._spinY.valueChanged.connect(cb),
+        )
         return container
 
     def _createHotkeyWidget(self, paramDef: ParamDef) -> QLineEdit:
         """创建 hotkey 类型热键录入控件"""
-        lineEdit = QLineEdit()
-        lineEdit.setMinimumHeight(32)
-        lineEdit.setText(str(paramDef.default))
-        lineEdit.textChanged.connect(self._markDirty)
+        lineEdit = self._createStrWidget(paramDef)
         # HotkeyRecorder 由 lineEdit 持有（parent），负责拦截点击/按键、录制组合键
         HotkeyRecorder(lineEdit)
         return lineEdit
@@ -691,7 +675,9 @@ class EventEditPage(QWidget):
         switch = ToggleSwitch()
         switch.setFixedSize(40, 22)
         switch.setChecked(bool(paramDef.default))
-        switch.toggled.connect(self._markDirty)
+        switch.getValue = switch.isChecked
+        switch.setValue = switch.setChecked
+        switch.onChanged = lambda cb, s=switch: s.toggled.connect(cb)
         return switch
 
     _INT32_MIN, _INT32_MAX = -(1 << 31), (1 << 31) - 1
@@ -702,7 +688,9 @@ class EventEditPage(QWidget):
         spinBox.setMinimumHeight(32)
         spinBox.setRange(self._INT32_MIN, self._INT32_MAX)
         spinBox.setValue(int(paramDef.default))
-        spinBox.valueChanged.connect(self._markDirty)
+        spinBox.getValue = spinBox.value
+        spinBox.setValue = spinBox.setValue
+        spinBox.onChanged = lambda cb, sb=spinBox: sb.valueChanged.connect(cb)
         return spinBox
 
     def _createFloatWidget(self, paramDef: ParamDef) -> QDoubleSpinBox:
@@ -712,7 +700,9 @@ class EventEditPage(QWidget):
         spinBox.setRange(-1e9, 1e9)  # 整数9位 + 小数6位 = 15位有效数字，匹配double精度
         spinBox.setDecimals(6)
         spinBox.setValue(float(paramDef.default))
-        spinBox.valueChanged.connect(self._markDirty)
+        spinBox.getValue = spinBox.value
+        spinBox.setValue = spinBox.setValue
+        spinBox.onChanged = lambda cb, sb=spinBox: sb.valueChanged.connect(cb)
         return spinBox
 
     def _createStrWidget(self, paramDef: ParamDef) -> QLineEdit:
@@ -720,7 +710,9 @@ class EventEditPage(QWidget):
         lineEdit = QLineEdit()
         lineEdit.setMinimumHeight(32)
         lineEdit.setText(str(paramDef.default))
-        lineEdit.textChanged.connect(self._markDirty)
+        lineEdit.getValue = lambda le=lineEdit: le.text()
+        lineEdit.setValue = lambda v, le=lineEdit: le.setText(str(v))
+        lineEdit.onChanged = lambda cb, le=lineEdit: le.textChanged.connect(cb)
         return lineEdit
 
     def _collectScriptArgs(self) -> dict[str, int | float | str | bool | list]:
@@ -735,37 +727,25 @@ class EventEditPage(QWidget):
             if widget is None:
                 continue
 
-            value = self._getParamValue(widget, paramDef)
+            value = self._getParamValue(widget)
             if value is None:
                 continue
             result[paramDef.name] = value
         return result
 
-    def _getParamValue(self, widget: QWidget, paramDef: ParamDef) -> int | float | str | bool | list | None:
-        """从单个控件中获取参数值
+    @staticmethod
+    def _getParamValue(widget: QWidget) -> int | float | str | bool | list | None:
+        """从控件中获取参数值。
 
         Args:
-            widget: 输入控件
-            paramDef: 参数声明
+            widget: 已注入 getValue() 的控件。
 
         Returns:
-            参数值，空 QComboBox 时返回 None 表示跳过
+            参数值，控件返回 None 时表示跳过。
         """
-        if isinstance(widget, QComboBox):
-            if widget.count() == 0:
-                return None
-            return widget.currentData()
-        elif paramDef.type == ParamType.COORD:
-            return [widget._spinX.value(), widget._spinY.value()]
-        elif isinstance(widget, ToggleSwitch):
-            return widget.isChecked()
-        elif isinstance(widget, QSpinBox):
-            return widget.value()
-        elif isinstance(widget, QDoubleSpinBox):
-            return widget.value()
-        elif isinstance(widget, QLineEdit):
-            return widget.text()
-        return paramDef.default
+        getter = getattr(widget, 'getValue', None)
+        assert getter is not None, f'{type(widget).__name__} missing getValue injection'
+        return getter()
 
     def _restoreScriptArgs(self, scriptArgs: dict):
         """将保存的参数值还原到参数控件
@@ -786,26 +766,11 @@ class EventEditPage(QWidget):
 
             savedValue = scriptArgs[paramDef.name]
 
+            setter = getattr(widget, 'setValue', None)
+            assert setter is not None, f'{type(widget).__name__} missing setValue injection'
             try:
-                if isinstance(widget, QComboBox):
-                    idx = widget.findData(savedValue)
-                    if idx >= 0:
-                        widget.setCurrentIndex(idx)
-                    # 值不在 options 中时保持默认
-                elif paramDef.type == ParamType.COORD:
-                    if isinstance(savedValue, (list, tuple)) and len(savedValue) >= 2:
-                        widget._spinX.setValue(int(savedValue[0]))
-                        widget._spinY.setValue(int(savedValue[1]))
-                elif isinstance(widget, ToggleSwitch):
-                    widget.setChecked(bool(savedValue))
-                elif isinstance(widget, QSpinBox):
-                    widget.setValue(int(savedValue))
-                elif isinstance(widget, QDoubleSpinBox):
-                    widget.setValue(float(savedValue))
-                elif isinstance(widget, QLineEdit):
-                    widget.setText(str(savedValue))
+                setter(savedValue)
             except (ValueError, TypeError):
-                # 类型转换失败，保持默认值
                 pass
 
     @staticmethod
