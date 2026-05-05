@@ -11,10 +11,9 @@ import keyboard
 from PySide6.QtCore import Signal, QEvent, QObject, QCoreApplication, Qt
 from PySide6.QtGui import QTextDocument, QPalette
 from PySide6.QtWidgets import (
-    QWidget, QButtonGroup, QMessageBox,
-    QSizePolicy, QSpacerItem,
+    QWidget, QFrame, QLabel, QButtonGroup, QMessageBox, QSizePolicy,
     QSpinBox, QDoubleSpinBox, QLineEdit, QComboBox,
-    QLabel, QHBoxLayout, QFrame, QStyledItemDelegate, QStyle,
+    QHBoxLayout, QGridLayout, QStyledItemDelegate, QStyle,
 )
 from core import common
 from core import event_listener
@@ -497,29 +496,34 @@ class EventEditPage(QWidget):
                 return
 
     def _createParamRow(self, paramDef: ParamDef) -> QFrame:
-        """根据 ParamDef 创建一个参数行（标签 + 控件）
+        """根据 ParamDef 创建一个参数行（标签 + 控件 + 可选描述提示）
 
-        行布局与 .ui 中定义的 hotkeyRow / scopeRow / scriptRow 等保持一致：
-        QFrame(零边距) + QHBoxLayout(spacing=12) + QLabel(role=fieldLabel, minWidth=60) + 控件
+        使用 QGridLayout：
+          Row 0: [label(AlignVCenter)] [widget]
+          Row 1: [         —         ] [hint]  — 仅当 description 存在
+
+        label 和 widget 同行垂直居中对齐；hint 独立占行，不影响对齐。
 
         Args:
             paramDef: 参数声明元数据
 
         Returns:
-            包含标签和输入控件的 QFrame
+            包含标签、控件和提示的 QFrame
         """
         row = QFrame()
         row.setObjectName("paramRow")
-        hLayout = QHBoxLayout(row)
-        hLayout.setContentsMargins(0, 0, 0, 0)
-        hLayout.setSpacing(12)
+        grid = QGridLayout(row)
+        grid.setContentsMargins(0, 0, 0, 0)
+        grid.setHorizontalSpacing(12)
+        grid.setVerticalSpacing(2)
+        grid.setColumnStretch(1, 1)
 
         # 标签：与 .ui 中的 fieldLabel 一致（role + minWidth）
         labelText = getLocalizedText(paramDef.label, fallback=paramDef.name)
         label = QLabel(labelText)
         label.setMinimumWidth(60)
         label.setProperty("role", "fieldLabel")
-        hLayout.addWidget(label)
+        grid.addWidget(label, 0, 0, Qt.AlignmentFlag.AlignVCenter)
 
         # 根据类型创建控件
         widget = self._createParamWidget(paramDef)
@@ -538,19 +542,17 @@ class EventEditPage(QWidget):
             )
 
         if paramDef.type == ParamType.BOOL:
-            # bool 类型：开关在左侧（不加 stretch），右侧加 spacer 推到左边
-            hLayout.addWidget(widget)
-            spacer = QSpacerItem(0, 0, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
-            hLayout.addSpacerItem(spacer)
+            grid.addWidget(widget, 0, 1, Qt.AlignmentFlag.AlignLeft)
         else:
-            # 其他类型：控件占据剩余空间
-            hLayout.addWidget(widget, 1)
+            grid.addWidget(widget, 0, 1)
 
-        # 描述文本作为 tooltip，而非独立标签，保持行布局一致性
+        # 描述提示
         descText = getLocalizedText(paramDef.description)
         if descText:
-            label.setToolTip(descText)
-            widget.setToolTip(descText)
+            hintLabel = QLabel(descText)
+            hintLabel.setProperty("role", "hint")
+            hintLabel.setWordWrap(True)
+            grid.addWidget(hintLabel, 1, 1)
 
         return row
 

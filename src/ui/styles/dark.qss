@@ -277,7 +277,8 @@ QLabel[role="fieldLabel"] {
 
 /* 提示文字 */
 QLabel#positionHint,
-QLabel#clicksHint {
+QLabel#clicksHint,
+QLabel[role="hint"] {
     color: #5C6370;
 }
 

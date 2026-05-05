@@ -280,6 +280,11 @@ QLabel[role="fieldLabel"] {
     min-width: 60px;
 }
 
+/* 参数描述提示 (始终可见的说明小字) */
+QLabel[role="hint"] {
+    font-size: 11px;
+}
+
 /* 提示文字 */
 QLabel#positionHint,
 QLabel#clicksHint {
