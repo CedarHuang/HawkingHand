@@ -1,7 +1,6 @@
 import json
 
 from core import common
-from core import event_listener
 from core import logger
 from core import startup
 from core.callbacks import callbacks, CallbackEvent
@@ -23,7 +22,7 @@ class EventManager(list[Event]):
         with open(common.event_config_path(), 'w', encoding='utf-8') as file:
             dicts = [event.to_dict() for event in self]
             json.dump(dicts, file, indent=4, ensure_ascii=False)
-        event_listener.restart()
+        callbacks.trigger(CallbackEvent.EVENTS_CHANGED)
 
     def insert(self, index, event):
         super().insert(index, event)

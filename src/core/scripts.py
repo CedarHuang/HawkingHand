@@ -11,9 +11,9 @@ import watchdog.observers
 
 from core import api
 from core import common
-from core import event_listener
 from core import logger
 from core import vision_backend
+from core.callbacks import callbacks, CallbackEvent
 from core.models import ParamDef, ParamRef, ParamType, ScriptMetadata
 
 
@@ -204,7 +204,7 @@ class ScriptObserver(watchdog.events.FileSystemEventHandler):
             _save_metadata_cache()
         logger.script.info(f'File "{path}" has been modified, reload!')
 
-        event_listener.restart()
+        callbacks.trigger(CallbackEvent.SCRIPTS_CHANGED)
 
     def start(self):
         ensure_builtin_scripts()

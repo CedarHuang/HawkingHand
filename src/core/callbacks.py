@@ -3,6 +3,12 @@ from enum import Enum, auto
 class CallbackEvent(Enum):
     """回调事件类型枚举"""
 
+    EVENTS_CHANGED = auto()
+    """事件配置变更"""
+
+    SCRIPTS_CHANGED = auto()
+    """脚本文件修改"""
+
     TRAY_UPDATE = auto()
     """托盘更新事件"""
 

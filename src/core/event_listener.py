@@ -6,6 +6,7 @@ import keyboard
 from core import config
 from core import foreground_listener
 from core import logger
+from core.callbacks import callbacks, CallbackEvent
 from core.scripts import scripts
 
 _executor = ThreadPoolExecutor(max_workers=256)
@@ -81,6 +82,8 @@ def stop():
     foreground_listener.clear_event_callback_list()
 
 
+@callbacks.on(CallbackEvent.EVENTS_CHANGED)
+@callbacks.on(CallbackEvent.SCRIPTS_CHANGED)
 def restart():
     stop()
     start()
